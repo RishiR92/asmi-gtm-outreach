@@ -1,0 +1,74 @@
+name: Autopilot Daily Send
+
+on:
+  # US Eastern 9am Mon-Fri  (14:00 UTC)
+  # US Pacific 9am Mon-Fri  (17:00 UTC)
+  # India 9am Mon-Fri       (03:30 UTC — handled by local cron)
+  schedule:
+    - cron: "0 14 * * 1-5"   # 9am ET  — catches East Coast influencers
+    - cron: "0 17 * * 1-5"   # 9am PT  — catches West Coast influencers
+
+  # Manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (skip actual sends)"
+        type: boolean
+        default: false
+
+jobs:
+  send-emails:
+    name: Run autopilot send cycle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run daily send
+        if: ${{ !inputs.dry_run }}
+        env:
+          GMAIL_EMAIL:        ${{ secrets.GMAIL_EMAIL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          SENDER_NAME:        ${{ secrets.SENDER_NAME || 'Rishi' }}
+          DAILY_SEND_LIMIT:   ${{ secrets.DAILY_SEND_LIMIT || '20' }}
+        run: python backend/run_daily_send.py
+
+      - name: Dry run (log queue only)
+        if: ${{ inputs.dry_run }}
+        run: |
+          python - <<'EOF'
+          import sys; sys.path.insert(0, "backend")
+          from dotenv import load_dotenv; load_dotenv("backend/.env")
+          from database import SessionLocal, engine, Base
+          from models import Base as B
+          B.metadata.create_all(bind=engine)
+          from services.prioritizer import get_daily_queue
+          db = SessionLocal()
+          q = get_daily_queue(db, 20)
+          print(f"Would send to {len(q)} leads:")
+          for lead, score in q:
+              print(f"  score={score:.1f}  {lead.name} <{lead.email}>  tz={lead.lead_timezone}")
+          db.close()
+          EOF
+
+      - name: Commit updated database
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name  "Asmi Autopilot"
+          git config user.email "bot@asmiai.com"
+          git add backend/outreach.db
+          git diff --cached --quiet || git commit -m "chore: autopilot run $(date -u '+%Y-%m-%d %H:%M UTC') [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

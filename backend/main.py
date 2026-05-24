@@ -1,0 +1,50 @@
+import os
+from dotenv import load_dotenv
+
+# Load .env before anything else
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from database import engine, Base
+from routers import leads, emails, templates, settings_router, dashboard
+from routers import autopilot
+from services.scheduler import start_scheduler
+from services.reply_checker import start_reply_checker
+from services.auto_pilot import start_autopilot
+import asyncio
+
+app = FastAPI(title="Cold Outreach System", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# Include routers
+app.include_router(leads.router, prefix="/api/leads", tags=["leads"])
+app.include_router(emails.router, prefix="/api/emails", tags=["emails"])
+app.include_router(templates.router, prefix="/api/templates", tags=["templates"])
+app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+app.include_router(autopilot.router, prefix="/api/autopilot", tags=["autopilot"])
+
+
+@app.on_event("startup")
+async def startup():
+    from seed_data import seed
+    seed()
+    asyncio.create_task(start_scheduler())
+    asyncio.create_task(start_reply_checker())
+    asyncio.create_task(start_autopilot())
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "message": "Cold Outreach System is running"}

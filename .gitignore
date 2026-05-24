@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+backend/venv/
+backend/.env
+*.egg-info/
+dist/
+build/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+*.log
+nohup.out
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# SQLite — we DO commit outreach.db so GitHub Actions can read/write leads
+# backend/outreach.db   <-- intentionally NOT ignored
+backend/cold_outreach.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env files (secrets go in GitHub Secrets, not the repo)
+.env
+.env.*
+!.env.example
