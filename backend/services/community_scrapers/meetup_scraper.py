@@ -61,9 +61,9 @@ def scout_meetup_sync(topics: Dict) -> List[Dict]:
                             continue
                         seen_groups.add(group_id)
 
-                        # Filter: 100+ members (Meetup groups tend to be smaller)
+                        # Filter: 50+ members (more permissive to find enough communities)
                         members = group.get("members", 0)
-                        if members < 100 or members > 50_000:
+                        if members < 50 or members > 100_000:
                             continue
 
                         # Organizer info
