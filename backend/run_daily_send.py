@@ -60,9 +60,19 @@ def main():
         run_autopilot_cycle()
 
     finally:
+        # IMPORTANT: scrub credentials from DB before committing back to repo
+        # Credentials live only in GitHub Secrets / .env, never in the committed DB
+        try:
+            settings = db.query(AppSettings).first()
+            if settings:
+                settings.gmail_email        = ""
+                settings.gmail_app_password = ""
+                db.commit()
+        except Exception:
+            pass
         db.close()
 
-    print("[run_daily_send] Done.")
+    print("[run_daily_send] Done — credentials scrubbed from DB.")
 
 
 if __name__ == "__main__":
