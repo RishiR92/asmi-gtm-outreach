@@ -22,6 +22,9 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Copy full backend (including outreach.db)
 COPY backend/ ./backend/
 
+# Set working directory to backend so uvicorn finds main:app
+WORKDIR /app/backend
+
 EXPOSE 8080
 
-CMD cd backend && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --log-level info"]
