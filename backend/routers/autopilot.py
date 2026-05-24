@@ -76,18 +76,20 @@ def get_queue(db: Session = Depends(get_db)):
     queue = get_daily_queue(db, limit=limit)
 
     results = []
-    for lead, score in queue:
+    for lead, score, asmi_users, viable in queue:
         results.append({
-            "lead_id":      lead.id,
-            "name":         lead.name,
-            "newsletter":   lead.newsletter_name,
-            "email":        lead.email,
-            "audience":     lead.estimated_audience,
-            "category":     lead.category,
-            "timezone":     getattr(lead, "lead_timezone", "America/New_York") or "America/New_York",
-            "priority":     bool(getattr(lead, "priority", False)),
-            "score":        score,
-            "status":       lead.status,
+            "lead_id":              lead.id,
+            "name":                 lead.name,
+            "newsletter":           lead.newsletter_name,
+            "email":                lead.email,
+            "audience":             lead.estimated_audience,
+            "category":             lead.category,
+            "timezone":             getattr(lead, "lead_timezone", "America/New_York") or "America/New_York",
+            "priority":             bool(getattr(lead, "priority", False)),
+            "score":                score,
+            "status":               lead.status,
+            "estimated_asmi_users": asmi_users,
+            "viable":               viable,
         })
 
     return {"data": results, "message": "ok"}

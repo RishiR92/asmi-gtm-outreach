@@ -65,7 +65,7 @@ def run_autopilot_cycle():
             return
 
         sent_count = 0
-        for lead, score in queue:
+        for lead, score, asmi_users, viable in queue:
             if sent_count >= remaining:
                 break
             try:
