@@ -8,7 +8,6 @@ Uses SerpAPI (free tier: 100/month) if SERPAPI_KEY is set, else falls back
 to DuckDuckGo web scraping (no API needed, slower but free).
 """
 
-import asyncio
 import logging
 import os
 import requests
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
 
 
-async def scout_google(topics: Dict) -> List[Dict]:
+def scout_google_sync(topics: Dict) -> List[Dict]:
     """
     Search Google for communities matching topics.
 
@@ -49,7 +48,7 @@ async def scout_google(topics: Dict) -> List[Dict]:
                     search_query = pattern.format(keyword=keyword)
 
                     try:
-                        results = await _search_google(search_query)
+                        results = _search_google(search_query)
 
                         for result in results[:5]:  # top 5 results per search
                             url = result.get("url", "")
@@ -93,19 +92,19 @@ async def scout_google(topics: Dict) -> List[Dict]:
     return communities
 
 
-async def _search_google(query: str) -> List[Dict]:
+def _search_google(query: str) -> List[Dict]:
     """
     Execute a search query.
 
     Uses SerpAPI if configured, else falls back to DuckDuckGo scraping.
     """
     if SERPAPI_KEY:
-        return await _search_serpapi(query)
+        return _search_serpapi(query)
     else:
-        return await _search_duckduckgo(query)
+        return _search_duckduckgo(query)
 
 
-async def _search_serpapi(query: str) -> List[Dict]:
+def _search_serpapi(query: str) -> List[Dict]:
     """Search via SerpAPI (free tier: 100 searches/month)."""
     try:
         params = {
@@ -131,7 +130,7 @@ async def _search_serpapi(query: str) -> List[Dict]:
         return []
 
 
-async def _search_duckduckgo(query: str) -> List[Dict]:
+def _search_duckduckgo(query: str) -> List[Dict]:
     """
     Fallback: search via DuckDuckGo (free, no API key needed).
 

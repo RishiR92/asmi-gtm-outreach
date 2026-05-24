@@ -7,7 +7,6 @@ group size, and activity level.
 Meetup has public JSON feeds for groups (no auth required for basic data).
 """
 
-import asyncio
 import logging
 import requests
 from typing import List, Dict
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 MEETUP_BASE = "https://api.meetup.com"
 
 
-async def scout_meetup(topics: Dict) -> List[Dict]:
+def scout_meetup_sync(topics: Dict) -> List[Dict]:
     """
     Search Meetup.com for groups matching topics.
 

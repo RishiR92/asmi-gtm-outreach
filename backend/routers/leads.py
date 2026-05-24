@@ -209,15 +209,10 @@ def scout_communities_now(background_tasks: BackgroundTasks, db: Session = Depen
     Runs in background; returns immediately.
     """
     try:
-        import asyncio
         from services.lead_scout import run_lead_scout
 
-        # Schedule scout to run in background
-        # Wrap async function to run with new event loop
-        def run_scout_sync():
-            asyncio.run(run_lead_scout())
-
-        background_tasks.add_task(run_scout_sync)
+        # Schedule scout to run in background (synchronous)
+        background_tasks.add_task(run_lead_scout)
         return {
             "data": None,
             "message": "Community scouting initiated (runs in background)",

@@ -128,7 +128,7 @@ def _deduplicate_by_name(db: Session, name: str) -> bool:
     return existing is not None
 
 
-async def run_lead_scout():
+def run_lead_scout():
     """
     Execute the full scouting cycle:
     1. Check if pipeline needs refilling (eligible leads < threshold)
@@ -168,8 +168,8 @@ async def run_lead_scout():
         # ── Scout Meetup ───────────────────────────────────────────────────
         print("[scout] Scouting Meetup.com groups...")
         try:
-            from community_scrapers.meetup_scraper import scout_meetup
-            meetup_communities = await scout_meetup(topics=COMMUNITY_TOPICS)
+            from community_scrapers.meetup_scraper import scout_meetup_sync
+            meetup_communities = scout_meetup_sync(topics=COMMUNITY_TOPICS)
             print(f"[scout] Found {len(meetup_communities)} Meetup groups")
 
             for comm in meetup_communities:
@@ -208,8 +208,8 @@ async def run_lead_scout():
         # ── Scout Google Search ────────────────────────────────────────────
         print("[scout] Scouting via Google Search...")
         try:
-            from community_scrapers.google_search_scraper import scout_google
-            search_communities = await scout_google(topics=COMMUNITY_TOPICS)
+            from community_scrapers.google_search_scraper import scout_google_sync
+            search_communities = scout_google_sync(topics=COMMUNITY_TOPICS)
             print(f"[scout] Found {len(search_communities)} communities via search")
 
             for comm in search_communities:
@@ -271,7 +271,9 @@ async def run_lead_scout():
         db.close()
 
 
-# ── Async background task loop ──────────────────────────────────────────────
+# ── Background task loop (sync) ─────────────────────────────────────────────
+import asyncio
+
 async def start_lead_scout_loop():
     """
     Background task: runs lead scouting every 3 days (259,200 seconds).
@@ -281,7 +283,7 @@ async def start_lead_scout_loop():
     while True:
         try:
             await asyncio.sleep(259_200)  # 3 days = 259,200 seconds
-            await run_lead_scout()
+            run_lead_scout()  # call sync function
         except Exception as e:
             print(f"[scout] Background loop error: {e}")
             await asyncio.sleep(60)  # brief retry delay on error
