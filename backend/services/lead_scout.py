@@ -168,7 +168,7 @@ def run_lead_scout():
         # ── Scout Meetup ───────────────────────────────────────────────────
         print("[scout] Scouting Meetup.com groups...")
         try:
-            from community_scrapers.meetup_scraper import scout_meetup_sync
+            from .community_scrapers.meetup_scraper import scout_meetup_sync
             meetup_communities = scout_meetup_sync(topics=COMMUNITY_TOPICS)
             print(f"[scout] Found {len(meetup_communities)} Meetup groups")
 
@@ -208,7 +208,7 @@ def run_lead_scout():
         # ── Scout Google Search ────────────────────────────────────────────
         print("[scout] Scouting via Google Search...")
         try:
-            from community_scrapers.google_search_scraper import scout_google_sync
+            from .community_scrapers.google_search_scraper import scout_google_sync
             search_communities = scout_google_sync(topics=COMMUNITY_TOPICS)
             print(f"[scout] Found {len(search_communities)} communities via search")
 
@@ -243,7 +243,47 @@ def run_lead_scout():
                     ineligible_new += 1
 
         except Exception as e:
-            print(f"[scout] Reddit scouting failed: {e}")
+            print(f"[scout] Google search scouting failed: {e}")
+
+        # ── Scout Community Seeds (reliable fallback) ────────────────────────
+        print("[scout] Adding seed communities...")
+        try:
+            from .community_scrapers.community_seeds import get_seed_communities
+            seed_communities = get_seed_communities(topics=COMMUNITY_TOPICS)
+            print(f"[scout] Found {len(seed_communities)} seed communities")
+
+            for comm in seed_communities:
+                # Skip if already in DB
+                if _deduplicate_by_name(db, comm["newsletter_name"]):
+                    continue
+
+                # Score and filter
+                comm["score"] = score_community(comm)
+                if comm["score"] < 40:
+                    continue
+
+                has_email = bool(comm.get("manager_email"))
+
+                # Create lead object
+                lead = Lead(
+                    name=comm.get("manager_name") or f"{comm['newsletter_name']} Organizer",
+                    newsletter_name=comm["newsletter_name"],
+                    url=comm.get("url", ""),
+                    estimated_audience=comm.get("members", 0),
+                    category=comm.get("category", "Niche"),
+                    email=comm.get("manager_email", ""),
+                    status="Email Found" if has_email else "New",
+                    notes=f"[AUTO-SCOUT] {comm['description']} | Relevance: {comm['score']:.0f} | Source: {comm.get('source', 'unknown')}",
+                )
+                new_leads.append(lead)
+
+                if has_email:
+                    eligible_new += 1
+                else:
+                    ineligible_new += 1
+
+        except Exception as e:
+            print(f"[scout] Seed community loading failed: {e}")
 
         # ── Insert new leads ────────────────────────────────────────────────
         if new_leads:
