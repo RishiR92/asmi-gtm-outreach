@@ -132,13 +132,12 @@ async def run_lead_scout():
     """
     Execute the full scouting cycle:
     1. Check if pipeline needs refilling (eligible leads < threshold)
-    2. If yes, scrape communities from multiple sources
+    2. If yes, scrape communities from multiple sources (Meetup, Google Search)
     3. Score by relevance, deduplicate, insert into DB
     4. Tracks eligible (with email) vs. ineligible (no email) leads separately
     """
     from database import SessionLocal
     from models import Lead, AppSettings
-    from community_scrapers.reddit_scraper import scout_reddit
 
     db = SessionLocal()
     try:
@@ -166,13 +165,54 @@ async def run_lead_scout():
         eligible_new = 0
         ineligible_new = 0
 
-        # ── Scout Reddit ────────────────────────────────────────────────────
-        print("[scout] Scouting Reddit communities...")
+        # ── Scout Meetup ───────────────────────────────────────────────────
+        print("[scout] Scouting Meetup.com groups...")
         try:
-            reddit_communities = await scout_reddit(topics=COMMUNITY_TOPICS)
-            print(f"[scout] Found {len(reddit_communities)} Reddit communities")
+            from community_scrapers.meetup_scraper import scout_meetup
+            meetup_communities = await scout_meetup(topics=COMMUNITY_TOPICS)
+            print(f"[scout] Found {len(meetup_communities)} Meetup groups")
 
-            for comm in reddit_communities:
+            for comm in meetup_communities:
+                # Skip if already in DB
+                if _deduplicate_by_name(db, comm["newsletter_name"]):
+                    continue
+
+                # Score and filter (lower threshold for aggressive scouting)
+                comm["score"] = score_community(comm)
+                if comm["score"] < 40:
+                    continue
+
+                has_email = bool(comm.get("manager_email"))
+
+                # Create lead object
+                lead = Lead(
+                    name=comm.get("manager_name") or f"{comm['newsletter_name']} Organizer",
+                    newsletter_name=comm["newsletter_name"],
+                    url=comm.get("url", ""),
+                    estimated_audience=comm.get("members", 0),
+                    category=comm.get("category", "Niche"),
+                    email=comm.get("manager_email", ""),
+                    status="Email Found" if has_email else "New",
+                    notes=f"[AUTO-SCOUT] {comm['description']} | Relevance: {comm['score']:.0f} | Source: {comm.get('source', 'unknown')}",
+                )
+                new_leads.append(lead)
+
+                if has_email:
+                    eligible_new += 1
+                else:
+                    ineligible_new += 1
+
+        except Exception as e:
+            print(f"[scout] Meetup scouting failed: {e}")
+
+        # ── Scout Google Search ────────────────────────────────────────────
+        print("[scout] Scouting via Google Search...")
+        try:
+            from community_scrapers.google_search_scraper import scout_google
+            search_communities = await scout_google(topics=COMMUNITY_TOPICS)
+            print(f"[scout] Found {len(search_communities)} communities via search")
+
+            for comm in search_communities:
                 # Skip if already in DB
                 if _deduplicate_by_name(db, comm["newsletter_name"]):
                     continue
