@@ -181,52 +181,138 @@ function QuickAddPanel({ onAdded }) {
   )
 }
 
-// ─── Today's Priority Queue ───────────────────────────────────────────────────
-function TodaysQueue({ queue, loading }) {
-  if (loading) return <div className="loading-spinner"><div className="spinner" /> Loading queue…</div>
-  if (!queue?.length) return (
-    <div className="empty-state" style={{ padding: 20 }}>
-      <div className="empty-icon">✅</div>
-      <p>All eligible leads have been contacted</p>
-    </div>
-  )
+// ─── Lead row shared by queue & schedule ─────────────────────────────────────
+function LeadRow({ item, rank }) {
   return (
-    <div className="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Lead</th>
-            <th>Audience</th>
-            <th>Category</th>
-            <th>Timezone</th>
-            <th>Score</th>
-            <th>Flag</th>
-          </tr>
-        </thead>
-        <tbody>
-          {queue.map((item, i) => (
-            <tr key={item.lead_id}>
-              <td style={{ color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
-              <td>
-                <strong>{item.name}</strong>
-                <div style={{ fontSize: 11, color: '#64748b' }}>{item.email}</div>
-              </td>
-              <td style={{ color: '#334155' }}>{fmtAudience(item.audience)}</td>
-              <td>
-                <span className="badge badge-new" style={{ fontSize: 10 }}>{item.category}</span>
-              </td>
-              <td style={{ fontSize: 12, color: '#64748b' }}>{item.timezone?.replace('America/', '').replace('_', ' ')}</td>
-              <td><ScoreBadge score={item.score} /></td>
-              <td>
-                {item.priority
-                  ? <span style={{ fontSize: 13 }} title="Manually prioritised">⚡</span>
-                  : <span style={{ fontSize: 13, color: '#e2e8f0' }}>·</span>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <tr key={item.lead_id}>
+      <td style={{ color: '#94a3b8', fontWeight: 600 }}>{rank}</td>
+      <td>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {item.viable && (
+            <span title="≥1 000 Asmi users" style={{
+              background: '#dcfce7', color: '#15803d', borderRadius: 4,
+              fontSize: 9, fontWeight: 700, padding: '1px 5px',
+            }}>✓ VIABLE</span>
+          )}
+          <div>
+            <strong>{item.name}</strong>
+            <div style={{ fontSize: 11, color: '#64748b' }}>{item.email}</div>
+          </div>
+        </div>
+      </td>
+      <td style={{ color: '#334155' }}>{fmtAudience(item.audience)}</td>
+      <td>
+        <span className="badge badge-new" style={{ fontSize: 10 }}>{item.category}</span>
+      </td>
+      <td style={{ fontSize: 12, color: '#64748b' }}>
+        {item.estimated_asmi_users
+          ? <span title="Estimated Asmi users from partnership">{fmtAudience(Math.round(item.estimated_asmi_users))}</span>
+          : '—'}
+      </td>
+      <td style={{ fontSize: 12, color: '#64748b' }}>{item.timezone?.replace('America/', '').replace('_', ' ')}</td>
+      <td><ScoreBadge score={item.score} /></td>
+      <td>
+        {item.priority
+          ? <span style={{ fontSize: 13 }} title="Manually prioritised">⚡</span>
+          : <span style={{ fontSize: 13, color: '#e2e8f0' }}>·</span>}
+      </td>
+    </tr>
+  )
+}
+
+// ─── 3-Day Schedule ───────────────────────────────────────────────────────────
+function ThreeDaySchedule({ schedule, loading }) {
+  const [activeDay, setActiveDay] = useState(0)
+
+  if (loading) return <div className="loading-spinner"><div className="spinner" /> Building schedule…</div>
+  if (!schedule?.length) return null
+
+  const day = schedule[activeDay]
+
+  return (
+    <div>
+      {/* Day tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {schedule.map((d, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveDay(i)}
+            style={{
+              padding: '8px 18px', borderRadius: 8, cursor: 'pointer', fontWeight: 600,
+              fontSize: 13, border: 'none', transition: 'all .15s',
+              background: activeDay === i ? '#2563eb' : '#f1f5f9',
+              color:      activeDay === i ? '#fff'    : '#475569',
+              boxShadow:  activeDay === i ? '0 2px 8px #2563eb44' : 'none',
+            }}
+          >
+            {d.day_label}
+            {d.is_today && <span style={{ marginLeft: 6, fontSize: 10, opacity: .8 }}>(today)</span>}
+            <span style={{
+              marginLeft: 8, background: activeDay === i ? 'rgba(255,255,255,.25)' : '#e2e8f0',
+              color: activeDay === i ? '#fff' : '#64748b',
+              borderRadius: 10, padding: '1px 7px', fontSize: 11,
+            }}>
+              {d.leads.length}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Notice */}
+      <div style={{
+        background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8,
+        padding: '8px 14px', fontSize: 12, color: '#92400e', marginBottom: 14,
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <span>⟳</span>
+        <span>Priority is <strong>re-ranked automatically</strong> at send time — this list shows the current best order and will update as new leads are added or statuses change.</span>
+      </div>
+
+      {/* Lead table */}
+      {!day?.leads?.length ? (
+        <div className="empty-state" style={{ padding: 20 }}>
+          <div className="empty-icon">✅</div>
+          <p>No eligible leads for this day</p>
+        </div>
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Lead</th>
+                <th>Audience</th>
+                <th>Category</th>
+                <th>Est. Asmi Users</th>
+                <th>Timezone</th>
+                <th>Score</th>
+                <th>Flag</th>
+              </tr>
+            </thead>
+            <tbody>
+              {day.leads.map((item, i) => (
+                <LeadRow key={item.lead_id} item={item} rank={i + 1} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Viable summary */}
+      {day?.leads?.length > 0 && (
+        <div style={{ marginTop: 12, fontSize: 12, color: '#64748b', display: 'flex', gap: 20 }}>
+          <span>
+            <strong style={{ color: '#15803d' }}>
+              {day.leads.filter(l => l.viable).length}
+            </strong> viable leads (≥1K Asmi users)
+          </span>
+          <span>
+            <strong style={{ color: '#2563eb' }}>
+              {fmtAudience(day.leads.reduce((s, l) => s + (l.estimated_asmi_users || 0), 0))}
+            </strong> total projected Asmi users
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -235,9 +321,9 @@ function TodaysQueue({ queue, loading }) {
 export default function Dashboard() {
   const [stats,    setStats]    = useState(null)
   const [apStatus, setApStatus] = useState(null)
-  const [queue,    setQueue]    = useState([])
+  const [schedule, setSchedule] = useState([])
   const [loading,  setLoading]  = useState(true)
-  const [queueLoading, setQL]   = useState(true)
+  const [schedLoading, setSL]   = useState(true)
   const [error,    setError]    = useState(null)
   const [runMsg,   setRunMsg]   = useState(null)
   const [running,  setRunning]  = useState(false)
@@ -255,16 +341,16 @@ export default function Dashboard() {
     finally { setLoading(false) }
   }
 
-  async function fetchQueue() {
-    setQL(true)
+  async function fetchSchedule() {
+    setSL(true)
     try {
-      const res = await api.get('/autopilot/queue')
-      setQueue(res.data.data || [])
+      const res = await api.get('/dashboard/schedule')
+      setSchedule(res.data.data || [])
     } catch (_) {}
-    finally { setQL(false) }
+    finally { setSL(false) }
   }
 
-  useEffect(() => { fetchAll(); fetchQueue() }, [])
+  useEffect(() => { fetchAll(); fetchSchedule() }, [])
 
   async function handleToggle(enabled) {
     try {
@@ -278,7 +364,7 @@ export default function Dashboard() {
     try {
       const res = await api.post('/autopilot/run-now')
       setRunMsg({ type: 'success', text: res.data.message })
-      await fetchAll(); await fetchQueue()
+      await fetchAll(); await fetchSchedule()
     } catch (e) {
       setRunMsg({ type: 'error', text: e.response?.data?.detail || e.message })
     } finally {
@@ -292,7 +378,8 @@ export default function Dashboard() {
   if (!stats)  return null
 
   const byStatus = stats.by_status || {}
-  const totalReach = (queue || []).reduce((s, l) => s + (l.audience || 0), 0)
+  // Flatten schedule to get total projected asmi users across all 3 days
+  const allScheduledLeads = (schedule || []).flatMap(d => d.leads || [])
 
   return (
     <div>
@@ -300,9 +387,9 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h2>Asmi GTM Dashboard</h2>
-          <p>Autopilot cold outreach — prioritised by audience, timezone & score</p>
+          <p>Autopilot cold outreach — prioritised by conversion potential & audience fit</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => { fetchAll(); fetchQueue() }}>🔄 Refresh</button>
+        <button className="btn btn-secondary" onClick={() => { fetchAll(); fetchSchedule() }}>🔄 Refresh</button>
       </div>
 
       {runMsg && (
@@ -320,20 +407,16 @@ export default function Dashboard() {
       />
 
       {/* Quick Add */}
-      <QuickAddPanel onAdded={() => { fetchAll(); fetchQueue() }} />
+      <QuickAddPanel onAdded={() => { fetchAll(); fetchSchedule() }} />
 
       {/* GTM Reach Metrics */}
       <div className="metrics-row mb-20">
         <div className="stat-card">
-          <div className="stat-label">Total Audience Reach</div>
+          <div className="stat-label">Projected Asmi Users (3-day)</div>
           <div className="stat-value" style={{ color: '#2563eb' }}>
-            {fmtAudience(
-              Object.values(byStatus).includes(0) ? 0 :
-              queue.reduce((s, l) => s + (l.audience || 0), 0) +
-              (stats.total_leads * 50000) // rough estimate for contacted
-            )}
+            {fmtAudience(Math.round(allScheduledLeads.reduce((s, l) => s + (l.estimated_asmi_users || 0), 0)))}
           </div>
-          <div className="stat-sub">across all contacted + queued leads</div>
+          <div className="stat-sub">from {allScheduledLeads.filter(l => l.viable).length} viable partnerships planned</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Emails Sent This Week</div>
@@ -350,11 +433,11 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">In Queue Today</div>
+          <div className="stat-label">Eligible Leads</div>
           <div className="stat-value" style={{ color: '#d97706' }}>
-            {apStatus?.eligible_leads ?? queue.length}
+            {apStatus?.eligible_leads ?? allScheduledLeads.length}
           </div>
-          <div className="stat-sub">eligible leads with emails</div>
+          <div className="stat-sub">with email, not yet contacted</div>
         </div>
       </div>
 
@@ -375,19 +458,22 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Today's Queue */}
+      {/* 3-Day Send Schedule */}
       <div className="card mb-20">
-        <div className="section-title" style={{ marginBottom: 14 }}>
-          🎯 Today's Priority Queue
+        <div className="section-title" style={{ marginBottom: 4 }}>
+          📅 Outreach Schedule — Next 3 Days
           <span style={{
             marginLeft: 'auto', fontSize: 11, fontWeight: 600,
             color: '#2563eb', background: '#eff6ff',
             padding: '2px 8px', borderRadius: 6,
           }}>
-            {queue.length} leads · sorted by score
+            Viable-first · re-ranked at send time
           </span>
         </div>
-        <TodaysQueue queue={queue} loading={queueLoading} />
+        <p style={{ fontSize: 12, color: '#64748b', marginBottom: 16, marginTop: 4 }}>
+          Sends begin Monday. Each day's list shows who gets emailed and their projected Asmi user contribution.
+        </p>
+        <ThreeDaySchedule schedule={schedule} loading={schedLoading} />
       </div>
 
       {/* Follow-ups Due */}

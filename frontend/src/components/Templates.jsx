@@ -6,7 +6,7 @@ export default function Templates() {
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [modal, setModal] = useState(null) // null | 'create' | template object
+  const [modal, setModal] = useState(null) // null | template object
 
   async function fetchTemplates() {
     setLoading(true)
@@ -23,86 +23,114 @@ export default function Templates() {
 
   useEffect(() => { fetchTemplates() }, [])
 
-  async function deleteTemplate(e, id) {
-    e.stopPropagation()
-    if (!window.confirm('Delete this template?')) return
-    try {
-      await api.delete(`/templates/${id}`)
-      fetchTemplates()
-    } catch (e) {
-      alert(e.message)
-    }
-  }
+  // The single active template is always the first one
+  const activeTemplate = templates[0] || null
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h2>Templates</h2>
-          <p>Email templates with A/B subject lines and follow-up sequences</p>
+          <h2>Outreach Template</h2>
+          <p>Single finalised template used for all outreach — edit subject lines, body, and follow-ups here</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setModal('create')}>
-          + New Template
-        </button>
+        {activeTemplate && (
+          <button className="btn btn-primary" onClick={() => setModal(activeTemplate)}>
+            ✏️ Edit Template
+          </button>
+        )}
       </div>
 
       {loading ? (
-        <div className="loading-spinner"><div className="spinner" /> Loading templates...</div>
+        <div className="loading-spinner"><div className="spinner" /> Loading template...</div>
       ) : error ? (
         <div className="alert alert-error">{error}</div>
-      ) : templates.length === 0 ? (
+      ) : !activeTemplate ? (
         <div className="empty-state">
           <div className="empty-icon">✉️</div>
-          <h3>No templates yet</h3>
-          <p>Create your first email template</p>
+          <h3>No template yet</h3>
+          <p>Contact support to initialise the default template</p>
         </div>
       ) : (
-        <div className="template-grid">
-          {templates.map(t => (
-            <div className="template-card" key={t.id} onClick={() => setModal(t)}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h3>{t.name}</h3>
-                  <div className="template-category">{t.category}</div>
-                </div>
-                <button
-                  className="btn btn-xs btn-danger"
-                  onClick={e => deleteTemplate(e, t.id)}
-                  style={{ flexShrink: 0 }}
-                >
-                  ✕
-                </button>
-              </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-              <div className="template-subject">
-                <strong>Subject A:</strong> {t.subject_a ? t.subject_a.slice(0, 60) + (t.subject_a.length > 60 ? '…' : '') : '—'}
+          {/* Header card */}
+          <div className="card" style={{ border: '2px solid #2563eb', cursor: 'pointer' }} onClick={() => setModal(activeTemplate)}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ margin: 0, color: '#1e293b' }}>{activeTemplate.name}</h3>
+                <div className="template-category" style={{ marginTop: 4 }}>{activeTemplate.category}</div>
               </div>
-              <div className="template-subject">
-                <strong>Subject B:</strong> {t.subject_b ? t.subject_b.slice(0, 60) + (t.subject_b.length > 60 ? '…' : '') : '—'}
+              <span style={{
+                background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe',
+                borderRadius: 20, padding: '3px 12px', fontSize: 11, fontWeight: 700,
+              }}>ACTIVE</span>
+            </div>
+
+            {/* Subject lines */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Subject A</div>
+                <div style={{ fontSize: 13, color: '#1e293b' }}>{activeTemplate.subject_a || '—'}</div>
               </div>
-
-              {t.followup1_subject && (
-                <div className="template-subject" style={{ marginTop: 8 }}>
-                  <strong>FU1:</strong> {t.followup1_subject.slice(0, 50) + (t.followup1_subject.length > 50 ? '…' : '')}
-                </div>
-              )}
-              {t.followup2_subject && (
-                <div className="template-subject">
-                  <strong>FU2:</strong> {t.followup2_subject.slice(0, 50) + (t.followup2_subject.length > 50 ? '…' : '')}
-                </div>
-              )}
-
-              <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-muted)' }}>
-                Updated {t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '—'}
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Subject B</div>
+                <div style={{ fontSize: 13, color: '#1e293b' }}>{activeTemplate.subject_b || '—'}</div>
               </div>
             </div>
-          ))}
+
+            {/* Body preview */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 6 }}>Body</div>
+              <div style={{
+                background: '#f8fafc', borderRadius: 8, padding: 14,
+                fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.6,
+                maxHeight: 200, overflow: 'auto',
+              }}>
+                {activeTemplate.body || '—'}
+              </div>
+            </div>
+
+            {/* Follow-ups */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ background: '#fefce8', borderRadius: 8, padding: 12, border: '1px solid #fde68a' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', marginBottom: 4 }}>Follow-up 1</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>{activeTemplate.followup1_subject || '—'}</div>
+                <div style={{ fontSize: 12, color: '#64748b', whiteSpace: 'pre-wrap', maxHeight: 100, overflow: 'auto' }}>
+                  {activeTemplate.followup1_body || '—'}
+                </div>
+              </div>
+              <div style={{ background: '#fefce8', borderRadius: 8, padding: 12, border: '1px solid #fde68a' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', marginBottom: 4 }}>Follow-up 2</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>{activeTemplate.followup2_subject || '—'}</div>
+                <div style={{ fontSize: 12, color: '#64748b', whiteSpace: 'pre-wrap', maxHeight: 100, overflow: 'auto' }}>
+                  {activeTemplate.followup2_body || '—'}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12, fontSize: 11, color: '#94a3b8' }}>
+              Last updated {activeTemplate.updated_at ? new Date(activeTemplate.updated_at).toLocaleDateString() : '—'} · Click anywhere to edit
+            </div>
+          </div>
+
+          {/* Available tokens */}
+          <div className="card">
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', marginBottom: 10 }}>Available template variables</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {['{{name}}', '{{newsletter}}', '{{audience}}', '{{custom_line}}'].map(token => (
+                <code key={token} style={{
+                  background: '#f1f5f9', border: '1px solid #e2e8f0',
+                  borderRadius: 6, padding: '3px 10px', fontSize: 12, color: '#0f172a',
+                }}>{token}</code>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
       {modal && (
         <TemplateModal
-          template={modal === 'create' ? null : modal}
+          template={modal}
           onClose={() => setModal(null)}
           onSave={fetchTemplates}
         />

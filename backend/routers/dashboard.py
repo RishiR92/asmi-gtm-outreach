@@ -4,7 +4,7 @@ from sqlalchemy import func
 from datetime import datetime, timedelta, date
 
 from database import get_db
-from models import Lead, EmailLog, ScheduledEmail
+from models import Lead, EmailLog, ScheduledEmail, AppSettings
 
 router = APIRouter()
 
@@ -88,3 +88,62 @@ def get_stats(db: Session = Depends(get_db)):
         },
         "message": "ok",
     }
+
+
+@router.get("/schedule", response_model=dict)
+def get_schedule(db: Session = Depends(get_db)):
+    """
+    Returns a 3-day advance send plan starting from the next Monday.
+    Each day's batch is the next slice of the priority queue (viable leads first).
+    The autopilot re-ranks at actual send time, so this is a live preview.
+    """
+    from services.prioritizer import get_daily_queue
+
+    settings = db.query(AppSettings).first()
+    daily_limit = (settings.daily_send_limit if settings else 20) or 20
+
+    # Compute start date: next Monday (or today if today is Monday)
+    today = date.today()
+    weekday = today.weekday()          # Mon=0 … Sun=6
+    days_until_monday = (7 - weekday) % 7
+    # If today is already Monday keep it; otherwise advance
+    start_date = today if days_until_monday == 0 else today + timedelta(days=days_until_monday)
+
+    # Pull enough leads for 3 days in one query, already sorted viable-first / score-desc
+    full_queue = get_daily_queue(db, limit=daily_limit * 3)
+
+    def _lead_dict(lead, score, asmi_users, viable, rank):
+        return {
+            "rank":                 rank,
+            "lead_id":              lead.id,
+            "name":                 lead.name,
+            "newsletter":           lead.newsletter_name,
+            "email":                lead.email,
+            "audience":             lead.estimated_audience,
+            "category":             lead.category,
+            "timezone":             getattr(lead, "lead_timezone", "America/New_York") or "America/New_York",
+            "priority":             bool(getattr(lead, "priority", False)),
+            "score":                score,
+            "estimated_asmi_users": asmi_users,
+            "viable":               viable,
+            "status":               lead.status,
+        }
+
+    schedule = []
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    for i in range(3):
+        day_date  = start_date + timedelta(days=i)
+        slice_    = full_queue[i * daily_limit : (i + 1) * daily_limit]
+        leads_out = [
+            _lead_dict(lead, score, asmi_users, viable, rank=j + 1)
+            for j, (lead, score, asmi_users, viable) in enumerate(slice_)
+        ]
+        schedule.append({
+            "date":      day_date.isoformat(),
+            "day_label": f"{day_names[day_date.weekday()]}, {day_date.strftime('%b %d')}",
+            "is_today":  day_date == today,
+            "leads":     leads_out,
+        })
+
+    return {"data": schedule, "message": "ok"}
