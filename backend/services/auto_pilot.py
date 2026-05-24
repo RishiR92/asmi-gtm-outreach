@@ -18,7 +18,7 @@ from sqlalchemy import func
 # ── Send-start gate ───────────────────────────────────────────────────────────
 # Autopilot will not send any emails before this date.
 # Set to the Monday the campaign launches; remove/backdate once ongoing.
-SEND_START_DATE = date(2026, 5, 26)   # Monday 26 May 2026
+SEND_START_DATE = date(2026, 5, 25)   # Monday 25 May 2026
 
 
 async def start_autopilot():
