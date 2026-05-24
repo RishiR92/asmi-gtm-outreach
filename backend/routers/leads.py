@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -202,17 +202,22 @@ def update_lead_status(lead_id: int, status_in: LeadStatusUpdate, db: Session = 
 
 
 @router.post("/scout/run-now", response_model=dict)
-def scout_communities_now(db: Session = Depends(get_db)):
+def scout_communities_now(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Manually trigger an immediate community scouting cycle.
     Useful for testing without waiting 3 days.
+    Runs in background; returns immediately.
     """
     try:
         import asyncio
         from services.lead_scout import run_lead_scout
 
-        # Run in background; return immediately
-        asyncio.create_task(run_lead_scout())
+        # Schedule scout to run in background
+        # Wrap async function to run with new event loop
+        def run_scout_sync():
+            asyncio.run(run_lead_scout())
+
+        background_tasks.add_task(run_scout_sync)
         return {
             "data": None,
             "message": "Community scouting initiated (runs in background)",
