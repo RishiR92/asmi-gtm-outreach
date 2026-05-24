@@ -50,18 +50,28 @@ def get_status(db: Session = Depends(get_db)):
         return {"data": {"autopilot_enabled": False}, "message": "ok"}
 
     from services.prioritizer import get_daily_queue
-    queue = get_daily_queue(db, limit=settings.daily_send_limit or 20)
+    daily_limit = settings.daily_send_limit or 20
+
+    # Get actual total eligible count (not capped)
+    total_eligible = db.query(Lead).filter(
+        Lead.email != None,
+        Lead.email != "",
+        Lead.status.in_(["New", "Email Found"]),
+    ).count()
+
+    queue = get_daily_queue(db, limit=daily_limit)
 
     sent_today = _today_sent(db)
-    remaining  = max(0, (settings.daily_send_limit or 20) - sent_today)
+    remaining  = max(0, daily_limit - sent_today)
 
     return {
         "data": {
             "autopilot_enabled": bool(getattr(settings, "autopilot_enabled", False)),
-            "daily_limit":       settings.daily_send_limit or 20,
+            "daily_limit":       daily_limit,
             "sent_today":        sent_today,
             "remaining_today":   remaining,
-            "eligible_leads":    len(queue),
+            "eligible_leads":    total_eligible,   # real count, not capped
+            "today_queue_size":  len(queue),        # today's actual send queue
         },
         "message": "ok",
     }
