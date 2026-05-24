@@ -6,3 +6,6 @@ dockerfilePath = "Dockerfile"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
+
+[deploy.environment]
+SERPAPI_KEY = "3353bc57fea2a42d303d2f03f7df954a1781368869ea3da5289ff474d53a2065"
