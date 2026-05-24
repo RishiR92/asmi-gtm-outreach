@@ -8,8 +8,13 @@ Runs every 3 days via background scheduler.
 
 import asyncio
 import logging
+import os
 from datetime import datetime
 from sqlalchemy.orm import Session
+from dotenv import load_dotenv
+
+# Load .env for background tasks
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

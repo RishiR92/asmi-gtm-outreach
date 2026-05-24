@@ -16,7 +16,10 @@ import time
 
 logger = logging.getLogger(__name__)
 
-SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
+
+def get_serpapi_key():
+    """Get SERPAPI_KEY from environment at runtime (not at import time)."""
+    return os.environ.get("SERPAPI_KEY", "")
 
 
 def scout_google_sync(topics: Dict) -> List[Dict]:
@@ -31,21 +34,14 @@ def scout_google_sync(topics: Dict) -> List[Dict]:
     communities = []
     seen_urls = set()
 
-    # Expanded search patterns to find more communities
+    # Optimized search patterns for fast discovery
     search_patterns = [
         "{keyword} community",
-        "{keyword} community online",
-        "{keyword} community groups",
         "{keyword} professional community",
-        "{keyword} network forum",
-        "{keyword} slack channel",
-        "{keyword} discord server",
-        "{keyword} facebook group",
-        "{keyword} meetup group",
-        "{keyword} leaders network",
     ]
 
-    if not SERPAPI_KEY:
+    serpapi_key = get_serpapi_key()
+    if not serpapi_key:
         logger.warning("[google_scout] SERPAPI_KEY not configured - skipping web search")
         return []
 
@@ -53,8 +49,8 @@ def scout_google_sync(topics: Dict) -> List[Dict]:
         for topic_name, topic_config in topics.items():
             keywords = topic_config.get("keywords", [])
 
-            # Search more keywords when we have API access
-            for keyword in keywords[:3]:
+            # Use fewer keywords for faster discovery
+            for keyword in keywords[:2]:
                 for pattern in search_patterns:
                     search_query = pattern.format(keyword=keyword)
 
@@ -162,10 +158,15 @@ def _is_community_url(url: str, title: str, snippet: str) -> bool:
 
 def _search_serpapi(query: str) -> List[Dict]:
     """Search via SerpAPI."""
+    serpapi_key = get_serpapi_key()
+    if not serpapi_key:
+        logger.warning("[serpapi] No API key configured")
+        return []
+
     try:
         params = {
             "q": query,
-            "api_key": SERPAPI_KEY,
+            "api_key": serpapi_key,
             "engine": "google",
             "num": 10,
             "gl": "us",  # Focus on US results
