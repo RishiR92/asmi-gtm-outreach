@@ -227,6 +227,12 @@ export default function Leads() {
                       {lead.status !== 'Not Interested' && (
                         <button className="btn btn-xs btn-danger" onClick={() => quickStatus(lead.id, 'Not Interested')}>✗</button>
                       )}
+                      <button
+                        className="btn btn-xs btn-danger"
+                        style={{ opacity: 0.7 }}
+                        onClick={() => deleteLead(lead)}
+                        title="Delete lead permanently"
+                      >🗑</button>
                     </div>
                   </td>
                 </tr>

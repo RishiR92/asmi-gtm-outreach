@@ -182,7 +182,23 @@ function QuickAddPanel({ onAdded }) {
 }
 
 // ─── Lead row shared by queue & schedule ─────────────────────────────────────
-function LeadRow({ item, rank }) {
+function LeadRow({ item, rank, onSkip }) {
+  const [skipping, setSkipping] = useState(false)
+
+  async function handleSkip(e) {
+    e.stopPropagation()
+    if (!window.confirm(`Skip "${item.name}"? They'll be removed from the queue (marked Not Interested).`)) return
+    setSkipping(true)
+    try {
+      await api.patch(`/leads/${item.lead_id}/status`, { status: 'Not Interested' })
+      if (onSkip) onSkip(item.lead_id)
+    } catch (err) {
+      alert('Failed to skip: ' + err.message)
+    } finally {
+      setSkipping(false)
+    }
+  }
+
   return (
     <tr key={item.lead_id}>
       <td style={{ color: '#94a3b8', fontWeight: 600 }}>{rank}</td>
@@ -216,12 +232,26 @@ function LeadRow({ item, rank }) {
           ? <span style={{ fontSize: 13 }} title="Manually prioritised">⚡</span>
           : <span style={{ fontSize: 13, color: '#e2e8f0' }}>·</span>}
       </td>
+      <td>
+        <button
+          onClick={handleSkip}
+          disabled={skipping}
+          title="Skip — remove from outreach queue"
+          style={{
+            background: 'none', border: '1px solid #fca5a5', borderRadius: 6,
+            color: '#dc2626', fontSize: 11, fontWeight: 600,
+            padding: '2px 8px', cursor: 'pointer', opacity: skipping ? 0.5 : 1,
+          }}
+        >
+          {skipping ? '…' : 'Skip'}
+        </button>
+      </td>
     </tr>
   )
 }
 
 // ─── 3-Day Schedule ───────────────────────────────────────────────────────────
-function ThreeDaySchedule({ schedule, loading }) {
+function ThreeDaySchedule({ schedule, loading, onRefresh }) {
   const [activeDay, setActiveDay] = useState(0)
 
   if (loading) return <div className="loading-spinner"><div className="spinner" /> Building schedule…</div>
@@ -287,11 +317,12 @@ function ThreeDaySchedule({ schedule, loading }) {
                 <th>Timezone</th>
                 <th>Score</th>
                 <th>Flag</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {day.leads.map((item, i) => (
-                <LeadRow key={item.lead_id} item={item} rank={i + 1} />
+                <LeadRow key={item.lead_id} item={item} rank={i + 1} onSkip={onRefresh} />
               ))}
             </tbody>
           </table>
@@ -473,7 +504,7 @@ export default function Dashboard() {
         <p style={{ fontSize: 12, color: '#64748b', marginBottom: 16, marginTop: 4 }}>
           Sends begin Monday. Each day's list shows who gets emailed and their projected Asmi user contribution.
         </p>
-        <ThreeDaySchedule schedule={schedule} loading={schedLoading} />
+        <ThreeDaySchedule schedule={schedule} loading={schedLoading} onRefresh={() => { fetchAll(); fetchSchedule() }} />
       </div>
 
       {/* Follow-ups Due */}
