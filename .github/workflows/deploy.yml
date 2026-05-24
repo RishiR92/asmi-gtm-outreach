@@ -1,30 +1,24 @@
-name: Deploy to Railway
+name: Deploy to Railway & Trigger Scout
 
 on:
   push:
     branches: [main]
 
 jobs:
-  deploy:
+  deploy-and-scout:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Deploy to Railway
-        uses: railwayapp/deploy-action@v1
-        with:
-          token: ${{ secrets.RAILWAY_TOKEN }}
-          service: backend
-
-      - name: Set SERPAPI_KEY in Railway
+      - name: Wait for Railway Deployment
         run: |
-          npm install -g @railway/cli
-          railway token ${{ secrets.RAILWAY_TOKEN }}
-          railway service connect backend
-          railway variables set SERPAPI_KEY=3353bc57fea2a42d303d2f03f7df954a1781368869ea3da5289ff474d53a2065
+          echo "Railway auto-deploys on git push (GitHub app configured)"
+          echo "SERPAPI_KEY included in railway.toml"
+          sleep 60
 
       - name: Trigger Scout on Production
         run: |
-          sleep 30
-          curl -X POST https://asmi-gtm-outreach-production.up.railway.app/api/leads/scout/run-now || true
+          echo "Triggering scout to populate communities with emails..."
+          curl -X POST https://asmi-gtm-outreach-production.up.railway.app/api/leads/scout/run-now
+          echo "Scout initiated - will run in background"
