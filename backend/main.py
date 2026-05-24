@@ -14,6 +14,7 @@ from routers import autopilot
 from services.scheduler import start_scheduler
 from services.reply_checker import start_reply_checker
 from services.auto_pilot import start_autopilot
+from services.lead_scout import start_lead_scout_loop
 import asyncio
 
 app = FastAPI(title="Cold Outreach System", version="1.0.0")
@@ -45,6 +46,7 @@ async def startup():
     asyncio.create_task(start_scheduler())
     asyncio.create_task(start_reply_checker())
     asyncio.create_task(start_autopilot())
+    asyncio.create_task(start_lead_scout_loop())
 
 
 @app.get("/api/health")

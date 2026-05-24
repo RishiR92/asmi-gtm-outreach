@@ -198,5 +198,26 @@ def update_lead_status(lead_id: int, status_in: LeadStatusUpdate, db: Session = 
     lead.status = status_in.status
     lead.updated_at = datetime.utcnow()
     db.commit()
+    return {"data": LeadResponse.model_validate(lead).model_dump(), "message": "Status updated"}
+
+
+@router.post("/scout/run-now", response_model=dict)
+def scout_communities_now(db: Session = Depends(get_db)):
+    """
+    Manually trigger an immediate community scouting cycle.
+    Useful for testing without waiting 3 days.
+    """
+    try:
+        import asyncio
+        from services.lead_scout import run_lead_scout
+
+        # Run in background; return immediately
+        asyncio.create_task(run_lead_scout())
+        return {
+            "data": None,
+            "message": "Community scouting initiated (runs in background)",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scout error: {e}")
     db.refresh(lead)
     return {"data": LeadResponse.model_validate(lead).model_dump(), "message": f"Status updated to {status_in.status}"}

@@ -82,7 +82,7 @@ def seed():
                 gmail_email=os.environ.get("GMAIL_EMAIL", ""),
                 gmail_app_password=os.environ.get("GMAIL_APP_PASSWORD", ""),
                 sender_name=os.environ.get("SENDER_NAME", "Rishi"),
-                daily_send_limit=20,
+                daily_send_limit=40,  # 40/day × 3 days = 120 leads in pipeline
                 followup1_days=4,
                 followup2_days=9,
                 send_hours_start=9,
