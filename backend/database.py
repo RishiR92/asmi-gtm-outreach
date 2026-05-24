@@ -4,7 +4,14 @@ from sqlalchemy.orm import sessionmaker
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'outreach.db')}"
+
+# In production (Railway) point to the persistent volume; locally use the repo file
+_default_db = os.path.join(BASE_DIR, "outreach.db")
+DATABASE_URL = os.environ.get("DATABASE_URL") or f"sqlite:///{_default_db}"
+
+# Railway gives a postgres:// URL if you add a Postgres plugin — convert if needed
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 engine = create_engine(
     DATABASE_URL,

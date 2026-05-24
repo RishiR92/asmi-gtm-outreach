@@ -6,6 +6,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from database import engine, Base
 from routers import leads, emails, templates, settings_router, dashboard
 from routers import autopilot
@@ -48,3 +50,14 @@ async def startup():
 @app.get("/api/health")
 def health():
     return {"status": "ok", "message": "Cold Outreach System is running"}
+
+
+# ── Serve React frontend in production ──────────────────────────────────────
+_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.exists(_DIST):
+    app.mount("/assets", StaticFiles(directory=os.path.join(_DIST, "assets")), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_spa(full_path: str):
+        """Catch-all: return index.html so React Router handles navigation."""
+        return FileResponse(os.path.join(_DIST, "index.html"))
