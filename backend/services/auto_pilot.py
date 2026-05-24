@@ -15,6 +15,11 @@ from datetime import datetime, timedelta, date
 
 from sqlalchemy import func
 
+# ── Send-start gate ───────────────────────────────────────────────────────────
+# Autopilot will not send any emails before this date.
+# Set to the Monday the campaign launches; remove/backdate once ongoing.
+SEND_START_DATE = date(2026, 5, 26)   # Monday 26 May 2026
+
 
 async def start_autopilot():
     while True:
@@ -37,6 +42,9 @@ def run_autopilot_cycle():
         if not settings:
             return
         if not getattr(settings, "autopilot_enabled", False):
+            return
+        if date.today() < SEND_START_DATE:
+            print(f"[autopilot] Campaign starts {SEND_START_DATE} — today is {date.today()}, skipping")
             return
         if not settings.gmail_email or not settings.gmail_app_password:
             print("[autopilot] Gmail credentials missing — skipping")

@@ -2,16 +2,78 @@ from database import SessionLocal
 from models import Template, Lead, AppSettings
 import os
 
+# ── Canonical template — edit here, deploys on next restart ──────────────────
+CANONICAL_TEMPLATE = dict(
+    name="Asmi Outreach",
+    category="AI Tools",
+    subject_a="Intro: Asmi (2x Founder, raised $100M + FAIR/DeepMind scientists)",
+    subject_b="Intro: Asmi (2x Founder, raised $100M + FAIR/DeepMind scientists)",
+    body=(
+        "Hi {{name}},\n\n"
+        "I'm Rishi - previously built and scaled a consumer platform to 600M+ users across Asia, "
+        "raised ~$100M from SoftBank, DoorDash and Zoom founders. My co-founder Satwik is ex-FAIR "
+        "and DeepMind, CMU PhD, 40+ highly cited papers on large action models.\n\n"
+        "We just launched Asmi - AI that handles your personal chores in the physical world.\n\n"
+        "You tell it what's stuck. It calls your dentist, bank, plumber, friends - navigates IVR, "
+        "waits on hold, follows up - and pings you on WhatsApp or iMessage when done. No app. No screen.\n\n"
+        "What it's handled this week:\n"
+        "• $47 charge on a bill - Asmi called, navigated the IVR, got it reversed\n"
+        "• 5 plumbers called, quotes compared, best one booked\n"
+        "• Daily check-in with a user's elderly mother in Rome. In Italian.\n\n"
+        "5,000+ real-world tasks closed in 4 weeks of beta. Zero paid acquisition.\n\n"
+        "Backed by Jack Brody (CPO Suno AI, ex-CPO Snap), ex-GenAI head Meta, and founders of frontier AI labs.\n\n"
+        "Would love to explore getting Asmi in front of your audience - happy to chat about what makes sense.\n\n"
+        "Regards,\n"
+        "Rishi"
+    ),
+    followup1_subject="Following up — Asmi",
+    followup1_body=(
+        "Hi {{name}},\n\n"
+        "Just circling back on Asmi. The traction — 5,000+ real-world tasks, zero paid acquisition, "
+        "40%+ day-7 retention — is pretty unique right now.\n\n"
+        "Would love 15 min to talk through what a collaboration could look like.\n\n"
+        "Regards,\n"
+        "Rishi"
+    ),
+    followup2_subject="Last note — Asmi",
+    followup2_body=(
+        "Hi {{name}},\n\n"
+        "Final message from me. If the timing isn't right, totally understand — "
+        "would love to reconnect when it is.\n\n"
+        "Regards,\n"
+        "Rishi"
+    ),
+)
+
+
+def _enforce_template(db):
+    """
+    Runs on every startup.
+    Deletes all templates and replaces with the single canonical one.
+    This ensures stale/extra templates are always cleaned up on deploy.
+    """
+    existing = db.query(Template).all()
+    for t in existing:
+        db.delete(t)
+    db.flush()
+
+    tmpl = Template(**CANONICAL_TEMPLATE)
+    db.add(tmpl)
+    db.commit()
+    print("[seed] Template enforced: single canonical template active.")
+
 
 def seed():
     db = SessionLocal()
     try:
-        # Only seed if tables are empty
+        # Always enforce the single correct template on every startup/deploy
+        _enforce_template(db)
+
+        # Only seed leads + settings on first run (empty DB)
         if db.query(Lead).count() > 0:
-            db.close()
             return
 
-        print("Seeding database...")
+        print("[seed] First run detected — seeding settings and leads...")
 
         # Seed AppSettings
         if db.query(AppSettings).count() == 0:
@@ -29,22 +91,6 @@ def seed():
                 imap_enabled=False,
             )
             db.add(settings)
-            db.commit()
-
-        # Seed single canonical template
-        if db.query(Template).count() == 0:
-            tmpl = Template(
-                name="Asmi Outreach",
-                category="AI Tools",
-                subject_a="2x founder + DeepMind/FAIR team building AI for {{newsletter}} audience",
-                subject_b="AI co-founder team (DeepMind, FAIR) + early traction",
-                body="Hey {{name}},\n\nRishi here — 2x founder, scaled to 600M+ consumers, ~$100M raised from SoftBank, DoorDash & Zoom founders.\n\nI'm now building Asmi with Satwik (CMU PhD, FAIR, DeepMind, 40+ highly cited papers) + team of AI researchers from DeepMind, FAIR, Google, CMU. Backed by Suno AI CPO/Snap CPO.\n\nAsmi: AI that handles personal chores in the physical world. 2,000+ real-world tasks executed in 3.5 weeks, 40%+ day-7 retention, $0 acquisition (growth from Asmi calling users' networks).\n\n{{custom_line}}\n\nThink this fits perfectly with {{newsletter}}. Would love to explore an engagement activity.\n\nBest,\nRishi",
-                followup1_subject="Quick follow-up — Asmi for {{newsletter}}",
-                followup1_body="Hey {{name}},\n\nJust circling back on Asmi. The traction (40%+ retention, organic growth through our AI calls) is genuinely noteworthy.\n\nWould be great to chat when you have 15 min.\n\nBest,\nRishi",
-                followup2_subject="Last message",
-                followup2_body="Hey {{name}},\n\nFinal follow-up. If timing isn't right now, I'd love to reconnect when it is. Building something I think your audience will care about.\n\nBest,\nRishi",
-            )
-            db.add(tmpl)
             db.commit()
 
         # Seed leads
@@ -91,9 +137,9 @@ def seed():
             db.add(lead)
 
         db.commit()
-        print(f"Seeded {len(leads_data)} leads and {len(templates_data)} templates.")
+        print(f"[seed] Seeded {len(leads_data)} leads.")
     except Exception as e:
-        print(f"Seed error: {e}")
+        print(f"[seed] Error: {e}")
         db.rollback()
     finally:
         db.close()
