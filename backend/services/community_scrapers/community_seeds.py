@@ -317,6 +317,8 @@ def get_seed_communities(topics: dict) -> list:
     Returns:
         List of community dicts formatted for lead creation
     """
+    from urllib.parse import urlparse
+
     communities = []
 
     for topic_name, topic_config in topics.items():
@@ -324,12 +326,16 @@ def get_seed_communities(topics: dict) -> list:
             continue
 
         for seed in COMMUNITY_SEEDS[topic_name]:
+            # Extract domain for generic email pattern
+            domain = urlparse(seed["url"]).netloc.replace("www.", "")
+            manager_email = f"contact@{domain}" if domain else ""
+
             community = {
                 "newsletter_name": seed["name"],
                 "members": seed["members"],
                 "manager_name": "",
                 "manager_url": seed["url"],
-                "manager_email": "",
+                "manager_email": manager_email,
                 "url": seed["url"],
                 "topic": topic_name,
                 "category": topic_config.get("category", "Niche"),
