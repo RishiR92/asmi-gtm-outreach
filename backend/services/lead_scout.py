@@ -254,14 +254,12 @@ def run_lead_scout():
         print("[scout] Adding seed communities...")
         try:
             from .community_scrapers.community_seeds import get_seed_communities
+            from models import Lead
+
             seed_communities = get_seed_communities(topics=COMMUNITY_TOPICS)
             print(f"[scout] Found {len(seed_communities)} seed communities")
 
             for comm in seed_communities:
-                # Skip if already in DB
-                if _deduplicate_by_name(db, comm["newsletter_name"]):
-                    continue
-
                 # Score and filter
                 comm["score"] = score_community(comm)
                 if comm["score"] < 40:
@@ -269,7 +267,19 @@ def run_lead_scout():
 
                 has_email = bool(comm.get("manager_email"))
 
-                # Create lead object
+                # Check if this seed already exists
+                existing = db.query(Lead).filter(Lead.newsletter_name == comm["newsletter_name"]).first()
+                if existing:
+                    # Update existing seed with email if we have one
+                    if has_email and not existing.email:
+                        existing.email = comm.get("manager_email", "")
+                        existing.status = "Email Found"
+                        db.commit()
+                        if has_email:
+                            eligible_new += 1
+                    continue
+
+                # Create new lead object
                 lead = Lead(
                     name=comm.get("manager_name") or f"{comm['newsletter_name']} Organizer",
                     newsletter_name=comm["newsletter_name"],
