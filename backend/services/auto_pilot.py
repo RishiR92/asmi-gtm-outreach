@@ -22,16 +22,19 @@ SEND_START_DATE = date(2026, 5, 25)   # Monday 25 May 2026
 
 
 async def start_autopilot():
+    # Short delay so Railway's health check passes before we start sending
+    await asyncio.sleep(10)
+
     # Run immediately on startup — catches any emails missed during redeploys
     try:
-        run_autopilot_cycle()
+        await asyncio.to_thread(run_autopilot_cycle)
     except Exception as e:
         print(f"[autopilot] startup cycle error: {e}")
 
     while True:
         await asyncio.sleep(1800)  # then every 30 minutes
         try:
-            run_autopilot_cycle()
+            await asyncio.to_thread(run_autopilot_cycle)
         except Exception as e:
             print(f"[autopilot] cycle error: {e}")
 
