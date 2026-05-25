@@ -1,15 +1,3 @@
-# ── Stage 1: Build React frontend ────────────────────────────────────────────
-FROM node:20-slim AS frontend-builder
-
-WORKDIR /app/frontend
-
-COPY frontend/package*.json ./
-RUN npm ci --silent
-
-COPY frontend/ ./
-RUN npm run build
-
-# ── Stage 2: Python backend + built frontend ──────────────────────────────────
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -21,8 +9,8 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Copy backend code
 COPY backend/ ./backend/
 
-# Copy built frontend from stage 1
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+# Copy pre-built frontend (built locally, committed to repo)
+COPY frontend/dist ./frontend/dist
 
 WORKDIR /app/backend
 

@@ -12,7 +12,7 @@ build/
 
 # Node
 frontend/node_modules/
-frontend/dist/
+# frontend/dist/ — committed so Railway doesn't need Node.js to build
 
 # Logs
 *.log
