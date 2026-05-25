@@ -1,28 +1,29 @@
+# ── Stage 1: Build React frontend ────────────────────────────────────────────
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN npm ci --silent
+
+COPY frontend/ ./
+RUN npm run build
+
+# ── Stage 2: Python backend + built frontend ──────────────────────────────────
 FROM python:3.11-slim
 
-# Install Node.js 20
-RUN apt-get update && apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
-
-# Install frontend deps and build
-COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm install
-
-COPY frontend/ ./frontend/
-RUN cd frontend && npm run build
 
 # Install backend deps
 COPY backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
-# Copy full backend (including outreach.db)
+# Copy backend code
 COPY backend/ ./backend/
 
-# Set working directory to backend so uvicorn finds main:app
+# Copy built frontend from stage 1
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+
 WORKDIR /app/backend
 
 EXPOSE 8080
