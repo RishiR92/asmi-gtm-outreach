@@ -23,8 +23,8 @@ nohup.out
 .AppleDouble
 .LSOverride
 
-# SQLite — we DO commit outreach.db so GitHub Actions can read/write leads
-# backend/outreach.db   <-- intentionally NOT ignored
+# SQLite — never commit the DB, Railway uses PostgreSQL in production
+backend/outreach.db
 backend/cold_outreach.db
 
 # Editor

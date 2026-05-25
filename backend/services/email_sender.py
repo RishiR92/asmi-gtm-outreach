@@ -1,5 +1,4 @@
-import base64
-import os
+import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sqlalchemy import func
@@ -16,38 +15,6 @@ def render_template(body: str, lead, custom_line: str = "") -> str:
     return result
 
 
-def _send_via_gmail_api(from_email: str, to_email: str, subject: str, body: str, sender_name: str = ""):
-    """Send via Gmail API over HTTPS — works on Railway (no SMTP ports needed)."""
-    from google.oauth2.credentials import Credentials
-    from googleapiclient.discovery import build
-
-    client_id     = os.environ.get("GMAIL_CLIENT_ID", "")
-    client_secret = os.environ.get("GMAIL_CLIENT_SECRET", "")
-    refresh_token = os.environ.get("GMAIL_REFRESH_TOKEN", "")
-
-    if not all([client_id, client_secret, refresh_token]):
-        raise Exception("Gmail API credentials missing — set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN in Railway environment variables.")
-
-    creds = Credentials(
-        token=None,
-        refresh_token=refresh_token,
-        client_id=client_id,
-        client_secret=client_secret,
-        token_uri="https://oauth2.googleapis.com/token",
-    )
-
-    service = build("gmail", "v1", credentials=creds, cache_discovery=False)
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = f"{sender_name} <{from_email}>" if sender_name else from_email
-    msg["To"]      = to_email
-    msg.attach(MIMEText(body, "plain"))
-
-    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    service.users().messages().send(userId="me", body={"raw": raw}).execute()
-
-
 def send_email(lead_id: int, subject: str, body: str, db, email_type: str = "initial"):
     from models import AppSettings, EmailLog, Lead
 
@@ -62,8 +29,8 @@ def send_email(lead_id: int, subject: str, body: str, db, email_type: str = "ini
     if not lead.email:
         raise Exception(f"Lead {lead.name} has no email address")
 
-    if not settings.gmail_email:
-        raise Exception("Gmail address not configured. Please update Settings.")
+    if not settings.gmail_email or not settings.gmail_app_password:
+        raise Exception("Gmail credentials not configured. Please update Settings.")
 
     # Check daily limit
     today_count = db.query(EmailLog).filter(
@@ -73,36 +40,48 @@ def send_email(lead_id: int, subject: str, body: str, db, email_type: str = "ini
     if today_count >= settings.daily_send_limit:
         raise Exception(f"Daily send limit of {settings.daily_send_limit} reached")
 
-    # Send via Gmail API (HTTPS — works on any host)
-    try:
-        _send_via_gmail_api(
-            from_email=settings.gmail_email,
-            to_email=lead.email,
-            subject=subject,
-            body=body,
-            sender_name=settings.sender_name or "",
-        )
-    except Exception as e:
+    # Build email
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{settings.sender_name} <{settings.gmail_email}>"
+    msg["To"] = lead.email
+    msg.attach(MIMEText(body, "plain"))
+
+    # Try port 587 (STARTTLS) first, fall back to 465 (SSL)
+    last_err = None
+    for port, use_ssl in [(587, False), (465, True)]:
+        try:
+            if use_ssl:
+                with smtplib.SMTP_SSL("smtp.gmail.com", port, timeout=30) as server:
+                    server.login(settings.gmail_email, settings.gmail_app_password)
+                    server.sendmail(settings.gmail_email, lead.email, msg.as_string())
+            else:
+                with smtplib.SMTP("smtp.gmail.com", port, timeout=30) as server:
+                    server.ehlo()
+                    server.starttls()
+                    server.ehlo()
+                    server.login(settings.gmail_email, settings.gmail_app_password)
+                    server.sendmail(settings.gmail_email, lead.email, msg.as_string())
+            last_err = None
+            break  # success
+        except Exception as e:
+            last_err = e
+            continue
+
+    if last_err:
         log = EmailLog(
-            lead_id=lead_id,
-            email_type=email_type,
-            sent_at=datetime.utcnow(),
-            subject=subject,
-            body=body,
-            status="failed",
-            error_msg=str(e),
+            lead_id=lead_id, email_type=email_type,
+            sent_at=datetime.utcnow(), subject=subject, body=body,
+            status="failed", error_msg=str(last_err),
         )
         db.add(log)
         db.commit()
-        raise
+        raise last_err
 
     # Log success
     log = EmailLog(
-        lead_id=lead_id,
-        email_type=email_type,
-        sent_at=datetime.utcnow(),
-        subject=subject,
-        body=body,
+        lead_id=lead_id, email_type=email_type,
+        sent_at=datetime.utcnow(), subject=subject, body=body,
         status="sent",
     )
     db.add(log)
