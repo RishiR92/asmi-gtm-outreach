@@ -11,14 +11,25 @@ When autopilot is enabled it:
 """
 
 import asyncio
+import pytz
 from datetime import datetime, timedelta, date
 
 from sqlalchemy import func
 
 # ── Send-start gate ───────────────────────────────────────────────────────────
-# Autopilot will not send any emails before this date.
-# Set to the Monday the campaign launches; remove/backdate once ongoing.
-SEND_START_DATE = date(2026, 5, 25)   # Monday 25 May 2026
+SEND_START_DATE = date(2026, 5, 26)   # Start fresh from Tuesday (today already sent 2x)
+
+# ── Send window (IST) ─────────────────────────────────────────────────────────
+# Only send between 9am–6pm India time — no overnight blasts
+SEND_TZ          = pytz.timezone("Asia/Kolkata")
+SEND_HOUR_START  = 9
+SEND_HOUR_END    = 18
+
+
+def _within_send_window() -> bool:
+    """Returns True if current IST time is within the allowed send window."""
+    now_ist = datetime.now(SEND_TZ)
+    return SEND_HOUR_START <= now_ist.hour < SEND_HOUR_END
 
 
 async def start_autopilot():
@@ -43,6 +54,9 @@ def run_autopilot_cycle():
         if not settings:
             return
         if not getattr(settings, "autopilot_enabled", False):
+            return
+        if not _within_send_window():
+            print(f"[autopilot] Outside send window (9am–6pm IST) — skipping")
             return
         if date.today() < SEND_START_DATE:
             print(f"[autopilot] Campaign starts {SEND_START_DATE} — today is {date.today()}, skipping")
