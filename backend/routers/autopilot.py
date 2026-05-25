@@ -8,7 +8,7 @@ POST /api/autopilot/run-now         — trigger an immediate send cycle
 POST /api/autopilot/quick-add       — add / update an email on a lead & mark priority
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date, datetime
@@ -121,31 +121,18 @@ def toggle_autopilot(req: ToggleRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/run-now")
-def run_now(db: Session = Depends(get_db)):
-    """Trigger one immediate autopilot cycle (respects daily limit)."""
-    try:
+def run_now(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Trigger one immediate autopilot cycle in the background (non-blocking)."""
+    settings = db.query(AppSettings).first()
+    if not settings:
+        raise HTTPException(status_code=500, detail="Settings missing")
+
+    def _run():
         from services.auto_pilot import run_autopilot_cycle
-        # Temporarily force-enable for this run if settings allow it
-        settings = db.query(AppSettings).first()
-        if not settings:
-            raise HTTPException(status_code=500, detail="Settings missing")
-
-        original = getattr(settings, "autopilot_enabled", False)
-        settings.autopilot_enabled = True
-        db.commit()
-
         run_autopilot_cycle()
 
-        # Restore original state
-        settings.autopilot_enabled = original
-        db.commit()
-
-        sent = _today_sent(db)
-        return {"data": {"sent_today": sent}, "message": "Autopilot cycle completed"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    background_tasks.add_task(_run)
+    return {"data": {}, "message": "Autopilot cycle triggered — sending in background"}
 
 
 @router.post("/quick-add")
