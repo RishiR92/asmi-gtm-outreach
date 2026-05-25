@@ -47,9 +47,12 @@ def send_email(lead_id: int, subject: str, body: str, db, email_type: str = "ini
     msg["To"] = lead.email
     msg.attach(MIMEText(body, "plain"))
 
-    # Send via SMTP
+    # Send via SMTP (port 587 + STARTTLS — works on Railway; port 465 is blocked)
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
             server.login(settings.gmail_email, settings.gmail_app_password)
             server.sendmail(settings.gmail_email, lead.email, msg.as_string())
     except smtplib.SMTPAuthenticationError:
