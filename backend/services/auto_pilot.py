@@ -108,10 +108,10 @@ def run_autopilot_cycle(force: bool = False):
         if not force and not getattr(settings, "autopilot_enabled", False):
             print("[autopilot] Autopilot disabled — skipping (use Run Now to force)")
             return
-        if not _within_send_window():
+        if not force and not _within_send_window():
             print(f"[autopilot] Outside send window (9am–6pm PT) — skipping")
             return
-        if date.today() < SEND_START_DATE:
+        if not force and date.today() < SEND_START_DATE:
             print(f"[autopilot] Campaign starts {SEND_START_DATE} — today is {date.today()}, skipping")
             return
         if not settings.gmail_email or not settings.gmail_app_password:
