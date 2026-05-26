@@ -11,7 +11,7 @@ POST /api/autopilot/quick-add       — add / update an email on a lead & mark p
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pydantic import BaseModel
 from typing import Optional
 
@@ -150,9 +150,14 @@ def debug_send(db: Session = Depends(get_db)):
     if not settings:
         raise HTTPException(status_code=500, detail="No settings in DB")
 
-    resend_key = getattr(settings, "resend_api_key", None) or ""
-    if not resend_key and not settings.gmail_app_password:
-        raise HTTPException(status_code=500, detail="No Resend API key and no Gmail app password — configure in Settings")
+    # Check at least one send method is configured
+    has_gmail_api = (getattr(settings, "gmail_client_id", None) and
+                     getattr(settings, "gmail_client_secret", None) and
+                     getattr(settings, "gmail_refresh_token", None))
+    has_resend    = bool(getattr(settings, "resend_api_key", None) or "")
+    has_smtp      = bool(settings.gmail_app_password)
+    if not has_gmail_api and not has_resend and not has_smtp:
+        raise HTTPException(status_code=500, detail="No send method configured — add Gmail OAuth credentials in Settings")
 
     template = db.query(Template).first()
     if not template:

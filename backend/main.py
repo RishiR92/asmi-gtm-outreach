@@ -30,32 +30,59 @@ app.add_middleware(
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-# ── Safe column migrations (works on all PostgreSQL versions) ─────────────────
-def _add_column_if_missing(conn, table: str, column: str, col_type: str):
-    """Add a column only if it doesn't already exist — checks information_schema."""
-    from sqlalchemy import text
-    exists = conn.execute(text(
-        "SELECT 1 FROM information_schema.columns "
-        "WHERE table_name=:t AND column_name=:c"
-    ), {"t": table, "c": column}).fetchone()
-    if not exists:
-        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
-        conn.commit()
-        print(f"[migration] added column {table}.{column}")
-
+# ── Safe column migrations (AUTOCOMMIT — no lock held between steps) ──────────
 def _run_migrations():
+    from sqlalchemy import text
+    # All columns that might be missing from older deployments
     NEW_COLS = [
-        ("app_settings", "resend_api_key",    "VARCHAR(255)"),
-        ("app_settings", "gmail_client_id",   "VARCHAR(512)"),
-        ("app_settings", "gmail_client_secret","VARCHAR(512)"),
-        ("app_settings", "gmail_refresh_token","TEXT"),
+        # app_settings — email provider fields
+        ("app_settings", "resend_api_key",      "VARCHAR(255)"),
+        ("app_settings", "gmail_client_id",     "VARCHAR(512)"),
+        ("app_settings", "gmail_client_secret", "VARCHAR(512)"),
+        ("app_settings", "gmail_refresh_token", "TEXT"),
+        # app_settings — feature flags (added in system hardening)
+        ("app_settings", "imap_enabled",        "BOOLEAN DEFAULT FALSE"),
+        ("app_settings", "autopilot_enabled",   "BOOLEAN DEFAULT FALSE"),
+        # leads — priority + timezone optimisation
+        ("leads", "priority",       "BOOLEAN DEFAULT FALSE"),
+        ("leads", "lead_timezone",  "VARCHAR(80) DEFAULT 'America/New_York'"),
     ]
-    with engine.connect() as conn:
+
+    from database import DATABASE_URL
+    is_sqlite = DATABASE_URL.startswith("sqlite")
+
+    if is_sqlite:
+        # SQLite: use PRAGMA to check columns
+        with engine.connect() as conn:
+            for table, col, col_type in NEW_COLS:
+                try:
+                    rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+                    col_names = [r[1] for r in rows]
+                    if col not in col_names:
+                        # SQLite doesn't support DEFAULT in ADD COLUMN with some types
+                        simple_type = col_type.split(" DEFAULT")[0]
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {simple_type}"))
+                        conn.commit()
+                        print(f"[migration] added {table}.{col} (sqlite)")
+                except Exception as e:
+                    print(f"[migration] {table}.{col} (sqlite): {e}")
+        return
+
+    # PostgreSQL: AUTOCOMMIT so each DDL releases its lock immediately
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         for table, col, col_type in NEW_COLS:
             try:
-                _add_column_if_missing(conn, table, col, col_type)
+                exists = conn.execute(text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name=:t AND column_name=:c"
+                ), {"t": table, "c": col}).fetchone()
+                if not exists:
+                    conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{col}" {col_type}'))
+                    print(f"[migration] added {table}.{col}")
+                else:
+                    print(f"[migration] {table}.{col} already exists")
             except Exception as e:
-                print(f"[migration] could not add {table}.{col}: {e}")
+                print(f"[migration] {table}.{col}: {e}")
 
 try:
     _run_migrations()
@@ -96,6 +123,49 @@ async def startup():
 @app.get("/api/health")
 def health():
     return {"status": "ok", "message": "Cold Outreach System is running"}
+
+
+@app.get("/api/debug/db")
+def debug_db():
+    """Show exact DB error — remove after fixing. Never exposes secrets."""
+    from database import SessionLocal
+    from sqlalchemy import text
+    db = SessionLocal()
+    result = {}
+    try:
+        # 1. Check what columns exist in app_settings
+        try:
+            rows = db.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='public' AND table_name='app_settings' "
+                "ORDER BY ordinal_position"
+            )).fetchall()
+            result["app_settings_cols"] = [r[0] for r in rows]
+        except Exception as e:
+            result["app_settings_cols_error"] = str(e)
+
+        # 2. Try querying AppSettings ORM
+        try:
+            from models import AppSettings
+            s = db.query(AppSettings).first()
+            result["settings_query"] = "ok" if s else "no row"
+        except Exception as e:
+            result["settings_query_error"] = str(e)
+
+        # 3. Check leads columns
+        try:
+            rows2 = db.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='public' AND table_name='leads' "
+                "ORDER BY ordinal_position"
+            )).fetchall()
+            result["leads_cols"] = [r[0] for r in rows2]
+        except Exception as e:
+            result["leads_cols_error"] = str(e)
+
+    finally:
+        db.close()
+    return result
 
 
 # ── Serve React frontend in production ──────────────────────────────────────
