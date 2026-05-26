@@ -30,6 +30,30 @@ app.add_middleware(
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+# ── Safe column migrations (add new columns without Alembic) ─────────────────
+# PostgreSQL doesn't auto-add new model columns — we do it manually here.
+# Each ALTER is wrapped in try/except so re-runs are harmless.
+def _run_migrations():
+    from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS resend_api_key VARCHAR(255)",
+        "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS gmail_client_id VARCHAR(512)",
+        "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS gmail_client_secret VARCHAR(512)",
+        "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS gmail_refresh_token TEXT",
+    ]
+    with engine.connect() as conn:
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
+try:
+    _run_migrations()
+except Exception as _me:
+    print(f"[migration] warning: {_me}")
+
 # Include routers
 app.include_router(leads.router, prefix="/api/leads", tags=["leads"])
 app.include_router(emails.router, prefix="/api/emails", tags=["emails"])
