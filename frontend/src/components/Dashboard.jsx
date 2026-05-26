@@ -100,16 +100,15 @@ function AutopilotBanner({ apStatus, onToggle, onRunNow, running }) {
         >
           {on ? '⏸ Pause' : '▶ Enable'}
         </button>
-        {on && (
-          <button
-            className="btn btn-secondary"
-            onClick={onRunNow}
-            disabled={running}
-            style={{ minWidth: 100 }}
-          >
-            {running ? '⏳ Sending…' : '⚡ Send Now'}
-          </button>
-        )}
+        <button
+          className="btn btn-secondary"
+          onClick={onRunNow}
+          disabled={running}
+          style={{ minWidth: 100 }}
+          title="Sends today's batch immediately — bypasses schedule and enabled toggle"
+        >
+          {running ? '⏳ Sending…' : '⚡ Send Now'}
+        </button>
       </div>
     </div>
   )
@@ -394,14 +393,21 @@ export default function Dashboard() {
     setRunning(true); setRunMsg(null)
     try {
       const res = await api.post('/autopilot/run-now')
-      setRunMsg({ type: 'success', text: res.data.message })
-      await fetchAll(); await fetchSchedule()
+      setRunMsg({ type: 'success', text: '⚡ Sending in background — refreshing in 20s…' })
+      // Emails are sent async in background — wait then refresh to show updated counts
+      setTimeout(async () => {
+        await fetchAll()
+        await fetchSchedule()
+        setRunMsg(m => m ? { ...m, text: res.data.message + ' ✓ Done — check sent count above.' } : null)
+        setTimeout(() => setRunMsg(null), 5000)
+      }, 20000)
     } catch (e) {
       setRunMsg({ type: 'error', text: e.response?.data?.detail || e.message })
-    } finally {
       setRunning(false)
-      setTimeout(() => setRunMsg(null), 4000)
+      setTimeout(() => setRunMsg(null), 6000)
+      return
     }
+    setTimeout(() => setRunning(false), 20000)
   }
 
   if (loading) return <div className="loading-spinner"><div className="spinner" /> Loading…</div>

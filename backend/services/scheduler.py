@@ -6,7 +6,7 @@ async def start_scheduler():
     while True:
         await asyncio.sleep(900)  # 15 minutes
         try:
-            process_scheduled()
+            await asyncio.to_thread(process_scheduled)  # run sync work off the event loop
         except Exception as e:
             print(f"Scheduler error: {e}")
 
@@ -67,10 +67,10 @@ def process_scheduled():
                 send_email(lead.id, rendered_subject, rendered_body, db, email_type=scheduled.email_type)
                 scheduled.status = "sent"
                 db.commit()
-                print(f"Sent scheduled {scheduled.email_type} to {lead.name}")
+                print(f"[scheduler] ✓ Sent {scheduled.email_type} to {lead.name}")
             except Exception as e:
-                print(f"Failed to send scheduled email to {lead.name}: {e}")
-                scheduled.status = "sent"  # Mark as attempted to avoid infinite retry
+                print(f"[scheduler] ✗ Failed {scheduled.email_type} to {lead.name}: {e}")
+                scheduled.status = "failed"   # visible in logs; won't retry (prevents spam)
                 db.commit()
     except Exception as e:
         print(f"process_scheduled error: {e}")

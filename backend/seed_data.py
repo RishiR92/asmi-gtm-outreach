@@ -48,19 +48,15 @@ CANONICAL_TEMPLATE = dict(
 
 def _enforce_template(db):
     """
-    Runs on every startup.
-    Deletes all templates and replaces with the single canonical one.
-    This ensures stale/extra templates are always cleaned up on deploy.
+    Creates the canonical template ONLY if no template exists yet.
+    User edits via UI are never overwritten on redeploy.
     """
-    existing = db.query(Template).all()
-    for t in existing:
-        db.delete(t)
-    db.flush()
-
+    if db.query(Template).count() > 0:
+        return   # already exists — never clobber user edits
     tmpl = Template(**CANONICAL_TEMPLATE)
     db.add(tmpl)
     db.commit()
-    print("[seed] Template enforced: single canonical template active.")
+    print("[seed] Template seeded (first run).")
 
 
 def seed():
@@ -87,7 +83,7 @@ def seed():
                 followup2_days=9,
                 send_hours_start=9,
                 send_hours_end=17,
-                timezone="Asia/Kolkata",
+                timezone="America/Los_Angeles",
                 imap_enabled=False,
             )
             db.add(settings)

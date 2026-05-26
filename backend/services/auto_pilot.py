@@ -111,11 +111,10 @@ def run_autopilot_cycle(force: bool = False):
         if not force and not _within_send_window():
             print(f"[autopilot] Outside send window (9am–6pm PT) — skipping")
             return
-        if not force and date.today() < SEND_START_DATE:
-            print(f"[autopilot] Campaign starts {SEND_START_DATE} — today is {date.today()}, skipping")
-            return
-        if not settings.gmail_email or not settings.gmail_app_password:
-            print("[autopilot] Gmail credentials missing — skipping")
+
+        resend_key = getattr(settings, "resend_api_key", None) or ""
+        if not resend_key and not settings.gmail_app_password:
+            print("[autopilot] No Resend API key and no Gmail app password — configure in Settings")
             return
 
         # How many sent today already?
@@ -125,9 +124,10 @@ def run_autopilot_cycle(force: bool = False):
         ).count()
 
         daily_limit = settings.daily_send_limit or 20
-        if today_sent > 0 and not force:
-            # Already sent at least one email today — done for the day
-            print(f"[autopilot] Already sent {today_sent} emails today — will retry tomorrow")
+
+        # Daily limit reached — done for the day (partial sends are OK, we send the remaining slots)
+        if today_sent >= daily_limit and not force:
+            print(f"[autopilot] Daily limit reached ({today_sent}/{daily_limit}) — done for today")
             return
 
         remaining = daily_limit - today_sent

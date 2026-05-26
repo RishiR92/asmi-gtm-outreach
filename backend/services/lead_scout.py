@@ -338,7 +338,7 @@ async def start_lead_scout_loop():
     while True:
         try:
             await asyncio.sleep(259_200)  # 3 days = 259,200 seconds
-            run_lead_scout()  # call sync function
+            await asyncio.to_thread(run_lead_scout)  # run sync work off the event loop
         except Exception as e:
             print(f"[scout] Background loop error: {e}")
             await asyncio.sleep(60)  # brief retry delay on error

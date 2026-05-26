@@ -138,18 +138,21 @@ def run_now(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
 @router.post("/debug-send")
 def debug_send(db: Session = Depends(get_db)):
     """
-    Synchronous dry-run: attempts to send ONE email to the top-ranked lead.
-    Returns the exact error if it fails — use this to diagnose SMTP issues.
+    Sends ONE real email to the top-ranked lead (synchronous, returns exact error).
+    Fully marks the lead as Contacted and schedules follow-ups — same as a real send.
+    Use this to diagnose send issues when Run Now gives no feedback.
     """
-    from models import Template, Lead
+    from models import Template, Lead, ScheduledEmail
     from services.prioritizer import get_tz_optimised_batch
     from services.email_sender import send_email, render_template
 
     settings = db.query(AppSettings).first()
     if not settings:
         raise HTTPException(status_code=500, detail="No settings in DB")
-    if not settings.gmail_email or not settings.gmail_app_password:
-        raise HTTPException(status_code=500, detail="Gmail credentials missing")
+
+    resend_key = getattr(settings, "resend_api_key", None) or ""
+    if not resend_key and not settings.gmail_app_password:
+        raise HTTPException(status_code=500, detail="No Resend API key and no Gmail app password — configure in Settings")
 
     template = db.query(Template).first()
     if not template:
@@ -157,7 +160,7 @@ def debug_send(db: Session = Depends(get_db)):
 
     queue = get_tz_optimised_batch(db, limit=1)
     if not queue:
-        raise HTTPException(status_code=500, detail="No eligible leads in queue")
+        raise HTTPException(status_code=500, detail="No eligible leads in queue (all contacted or no emails)")
 
     lead, score, asmi_users, viable = queue[0]
     subject = render_template(template.subject_a or "", lead)
@@ -165,15 +168,31 @@ def debug_send(db: Session = Depends(get_db)):
 
     try:
         send_email(lead.id, subject, body, db, email_type="initial")
-        lead.status = "Contacted"
-        lead.date_contacted = datetime.utcnow()
-        db.commit()
-        return {
-            "data": {"lead": lead.name, "email": lead.email, "subject": subject},
-            "message": f"✓ Email sent to {lead.name} ({lead.email})"
-        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"SMTP error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Send failed: {str(e)}")
+
+    # Mark lead as contacted and schedule follow-ups
+    lead.status = "Contacted"
+    lead.date_contacted = datetime.utcnow()
+    lead.template_id = template.id
+    lead.ab_variant = "A"
+
+    fu1_days = settings.followup1_days or 4
+    fu2_days = settings.followup2_days or 9
+    now = datetime.utcnow()
+    db.add(ScheduledEmail(lead_id=lead.id, email_type="followup1",
+                          scheduled_for=now + timedelta(days=fu1_days),
+                          status="pending", template_id=template.id, ab_variant="A"))
+    db.add(ScheduledEmail(lead_id=lead.id, email_type="followup2",
+                          scheduled_for=now + timedelta(days=fu2_days),
+                          status="pending", template_id=template.id, ab_variant="A"))
+    lead.follow_up_due = now + timedelta(days=fu1_days)
+    db.commit()
+
+    return {
+        "data": {"lead": lead.name, "email": lead.email, "subject": subject},
+        "message": f"✓ Email sent to {lead.name} ({lead.email})",
+    }
 
 
 @router.post("/quick-add")

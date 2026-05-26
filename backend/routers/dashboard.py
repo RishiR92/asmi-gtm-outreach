@@ -102,12 +102,9 @@ def get_schedule(db: Session = Depends(get_db)):
     settings = db.query(AppSettings).first()
     daily_limit = (settings.daily_send_limit if settings else 20) or 20
 
-    # Compute start date: next Monday (or today if today is Monday)
+    # Schedule starts from today — always show the next 3 days from now
     today = date.today()
-    weekday = today.weekday()          # Mon=0 … Sun=6
-    days_until_monday = (7 - weekday) % 7
-    # If today is already Monday keep it; otherwise advance
-    start_date = today if days_until_monday == 0 else today + timedelta(days=days_until_monday)
+    start_date = today
 
     # Pull enough leads for 3 days in one query, already sorted viable-first / score-desc
     full_queue = get_daily_queue(db, limit=daily_limit * 3)
