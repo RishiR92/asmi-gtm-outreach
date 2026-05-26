@@ -45,7 +45,30 @@ def test_connection(db: Session = Depends(get_db)):
 
     resend_key = getattr(settings, "resend_api_key", None) or ""
 
-    # ── Test Resend if key is configured (preferred on Railway) ──────────────
+    # ── Test Gmail API OAuth2 (preferred) ────────────────────────────────────
+    client_id     = getattr(settings, "gmail_client_id",     None) or ""
+    client_secret = getattr(settings, "gmail_client_secret", None) or ""
+    refresh_token = getattr(settings, "gmail_refresh_token", None) or ""
+
+    if client_id and client_secret and refresh_token:
+        try:
+            resp = requests.post(
+                "https://oauth2.googleapis.com/token",
+                data={"client_id": client_id, "client_secret": client_secret,
+                      "refresh_token": refresh_token, "grant_type": "refresh_token"},
+                timeout=10,
+            )
+            if resp.status_code == 200 and resp.json().get("access_token"):
+                return {"data": {"success": True, "method": "gmail_api"},
+                        "message": "✓ Gmail API credentials valid — ready to send via HTTPS."}
+            raise HTTPException(status_code=400,
+                detail=f"Gmail OAuth failed: {resp.json().get('error_description', resp.text)}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Gmail API test failed: {e}")
+
+    # ── Test Resend if key is configured ──────────────────────────────────────
     if resend_key:
         try:
             resp = requests.get(

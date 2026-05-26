@@ -23,6 +23,9 @@ export default function Settings() {
     gmail_email: '',
     gmail_app_password: '',
     resend_api_key: '',
+    gmail_client_id: '',
+    gmail_client_secret: '',
+    gmail_refresh_token: '',
     daily_send_limit: 20,
     followup1_days: 4,
     followup2_days: 9,
@@ -49,6 +52,9 @@ export default function Settings() {
         gmail_email: d.gmail_email || '',
         gmail_app_password: d.gmail_app_password || '',
         resend_api_key: d.resend_api_key || '',
+        gmail_client_id: d.gmail_client_id || '',
+        gmail_client_secret: d.gmail_client_secret || '',
+        gmail_refresh_token: d.gmail_refresh_token || '',
         daily_send_limit: d.daily_send_limit ?? 20,
         followup1_days: d.followup1_days ?? 4,
         followup2_days: d.followup2_days ?? 9,
@@ -118,39 +124,51 @@ export default function Settings() {
 
       <form onSubmit={handleSave}>
 
-        {/* Resend (Recommended) */}
+        {/* Gmail API — Recommended */}
         <div className="settings-section">
-          <h3>📧 Resend API <span style={{fontSize:12,background:'#dcfce7',color:'#166534',padding:'2px 8px',borderRadius:4,marginLeft:8}}>Recommended</span></h3>
+          <h3>📧 Gmail API (OAuth2) <span style={{fontSize:12,background:'#dcfce7',color:'#166534',padding:'2px 8px',borderRadius:4,marginLeft:8}}>Recommended</span></h3>
 
-          <div className="alert alert-info mb-16">
-            <strong>Railway blocks SMTP outbound.</strong> Use <strong>Resend</strong> (free, 100 emails/day) instead —
-            it sends over HTTPS so Railway can't block it.{' '}
-            <a href="https://resend.com" target="_blank" rel="noreferrer" style={{color:'var(--primary)'}}>Sign up at resend.com</a>,
-            add <code>asmiai.com</code> as a verified domain, then paste your API key below.
+          <div className="alert alert-info mb-16" style={{lineHeight:1.7}}>
+            <strong>Railway blocks SMTP — use Gmail API instead (HTTPS, always works).</strong><br/>
+            One-time 5-min setup:<br/>
+            1. <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">Google Cloud Console</a> → New project → <strong>Enable Gmail API</strong><br/>
+            2. APIs &amp; Services → Credentials → <strong>Create OAuth 2.0 Client ID</strong> (type: Web app)<br/>
+            &nbsp;&nbsp;&nbsp;Add <code>https://developers.google.com/oauthplayground</code> as Authorized Redirect URI<br/>
+            3. <a href="https://developers.google.com/oauthplayground/" target="_blank" rel="noreferrer">OAuth Playground</a> → ⚙️ → check "Use your own OAuth credentials" → paste Client ID &amp; Secret<br/>
+            4. Step 1: select <code>Gmail API v1 → .../auth/gmail.send</code> → Authorize<br/>
+            5. Step 2: Exchange auth code for tokens → copy <strong>Refresh token</strong><br/>
+            6. Paste Client ID, Client Secret, and Refresh Token below → Save
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>OAuth Client ID</label>
+              <input className="form-control" type="password" value={form.gmail_client_id}
+                onChange={set('gmail_client_id')} placeholder="xxxxx.apps.googleusercontent.com" />
+            </div>
+            <div className="form-group">
+              <label>OAuth Client Secret</label>
+              <input className="form-control" type="password" value={form.gmail_client_secret}
+                onChange={set('gmail_client_secret')} placeholder="GOCSPX-..." />
+            </div>
           </div>
 
           <div className="form-group">
-            <label>Resend API Key</label>
-            <input
-              className="form-control"
-              type="password"
-              value={form.resend_api_key}
-              onChange={set('resend_api_key')}
-              placeholder="re_xxxxxxxxxxxxxxxxxxxx"
-            />
+            <label>Refresh Token</label>
+            <input className="form-control" type="password" value={form.gmail_refresh_token}
+              onChange={set('gmail_refresh_token')} placeholder="1//0g..." />
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              When set, Resend is used instead of Gmail SMTP. From address stays as your Gmail.
+              Never expires. Emails send from your Gmail and appear in Sent folder.
             </div>
           </div>
         </div>
 
-        {/* Gmail Configuration */}
+        {/* Gmail SMTP — Fallback */}
         <div className="settings-section">
-          <h3>Gmail Configuration <span style={{fontSize:12,background:'#fef9c3',color:'#854d0e',padding:'2px 8px',borderRadius:4,marginLeft:8}}>Fallback only</span></h3>
+          <h3>Gmail Configuration <span style={{fontSize:12,background:'#fef9c3',color:'#854d0e',padding:'2px 8px',borderRadius:4,marginLeft:8}}>Fallback (blocked on Railway)</span></h3>
 
           <div className="alert alert-info mb-16">
-            <strong>Fallback:</strong> Used only when no Resend API key is set.
-            Requires a Gmail App Password from <strong>Google Account → Security → App passwords</strong>.
+            Used only when Gmail API credentials above are not set. Railway blocks SMTP so this may not work.
           </div>
 
           <div className="form-row">

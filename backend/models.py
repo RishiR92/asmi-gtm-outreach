@@ -117,6 +117,10 @@ class AppSettings(Base):
     send_hours_start = Column(Integer, default=9)
     send_hours_end = Column(Integer, default=17)
     timezone = Column(String(50), default="America/Los_Angeles")
-    resend_api_key = Column(String(255))          # Resend HTTPS API (preferred over SMTP on Railway)
+    resend_api_key = Column(String(255))
+    # Gmail API (OAuth2) — works on Railway; no SMTP ports needed
+    gmail_client_id     = Column(String(512))
+    gmail_client_secret = Column(String(512))
+    gmail_refresh_token = Column(Text)
     imap_enabled = Column(Boolean, default=False)
     autopilot_enabled = Column(Boolean, default=False)

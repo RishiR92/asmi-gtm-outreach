@@ -132,6 +132,9 @@ class AppSettingsUpdate(BaseModel):
     gmail_email: Optional[str] = None
     gmail_app_password: Optional[str] = None
     resend_api_key: Optional[str] = None
+    gmail_client_id: Optional[str] = None
+    gmail_client_secret: Optional[str] = None
+    gmail_refresh_token: Optional[str] = None
     sender_name: Optional[str] = None
     daily_send_limit: Optional[int] = None
     followup1_days: Optional[int] = None
@@ -148,6 +151,9 @@ class AppSettingsResponse(BaseModel):
     gmail_email: Optional[str] = None
     gmail_app_password: Optional[str] = None
     resend_api_key: Optional[str] = None
+    gmail_client_id: Optional[str] = None
+    gmail_client_secret: Optional[str] = None
+    gmail_refresh_token: Optional[str] = None
     sender_name: Optional[str] = None
     daily_send_limit: int
     followup1_days: int
