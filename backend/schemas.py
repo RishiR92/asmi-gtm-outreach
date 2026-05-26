@@ -40,6 +40,11 @@ class LeadStatusUpdate(BaseModel):
     status: str
 
 
+class BulkEmailStatusUpdate(BaseModel):
+    emails: List[str]          # list of email addresses to match
+    status: str = "Contacted"  # target status to set
+
+
 class LeadResponse(BaseModel):
     id: int
     name: str

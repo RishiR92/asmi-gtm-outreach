@@ -9,7 +9,7 @@ from datetime import datetime
 
 from database import get_db
 from models import Lead
-from schemas import LeadCreate, LeadUpdate, LeadResponse, LeadStatusUpdate
+from schemas import LeadCreate, LeadUpdate, LeadResponse, LeadStatusUpdate, BulkEmailStatusUpdate
 
 router = APIRouter()
 
@@ -155,6 +155,39 @@ async def import_leads(file: UploadFile = File(...), db: Session = Depends(get_d
 
     db.commit()
     return {"data": {"imported": imported, "skipped": skipped}, "message": f"Imported {imported} leads, skipped {skipped} duplicates"}
+
+
+@router.post("/bulk-status", response_model=dict)
+def bulk_update_status(payload: BulkEmailStatusUpdate, db: Session = Depends(get_db)):
+    """
+    Given a list of email addresses, set all matching leads to the given status.
+    Useful for marking leads as Contacted after a send whose logs were lost.
+    Returns how many were matched and updated.
+    """
+    if not payload.emails:
+        raise HTTPException(status_code=400, detail="No emails provided")
+
+    # Normalise (strip whitespace, lower-case) so matching is lenient
+    normalised = [e.strip().lower() for e in payload.emails if e.strip()]
+
+    updated = 0
+    not_found = []
+    for email_addr in normalised:
+        lead = db.query(Lead).filter(Lead.email.ilike(email_addr)).first()
+        if lead:
+            lead.status = payload.status
+            if payload.status == "Contacted" and not lead.date_contacted:
+                lead.date_contacted = datetime.utcnow()
+            lead.updated_at = datetime.utcnow()
+            updated += 1
+        else:
+            not_found.append(email_addr)
+
+    db.commit()
+    return {
+        "data": {"updated": updated, "not_found": not_found},
+        "message": f"Updated {updated} leads to '{payload.status}'. {len(not_found)} emails not matched.",
+    }
 
 
 @router.get("/{lead_id}", response_model=dict)

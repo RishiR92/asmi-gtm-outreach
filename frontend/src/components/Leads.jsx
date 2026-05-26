@@ -33,6 +33,10 @@ export default function Leads() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [modal, setModal] = useState(null) // null | 'create' | lead object
   const [actionMsg, setActionMsg] = useState(null)
+  const [bulkModal, setBulkModal] = useState(false)
+  const [bulkEmails, setBulkEmails] = useState('')
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkResult, setBulkResult] = useState(null)
   const fileInputRef = useRef()
   const PER_PAGE = 25
 
@@ -113,6 +117,25 @@ export default function Leads() {
     }
   }
 
+  async function handleBulkContacted() {
+    const emails = bulkEmails
+      .split(/[\n,;]+/)
+      .map(e => e.trim())
+      .filter(Boolean)
+    if (!emails.length) return
+    setBulkLoading(true)
+    setBulkResult(null)
+    try {
+      const res = await api.post('/leads/bulk-status', { emails, status: 'Contacted' })
+      setBulkResult(res.data)
+      fetchLeads()
+    } catch (e) {
+      setBulkResult({ message: e.message })
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
   const totalPages = Math.ceil(total / PER_PAGE)
 
   return (
@@ -129,6 +152,9 @@ export default function Leads() {
           <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImport} />
           <button className="btn btn-secondary btn-sm" onClick={handleExport}>
             📤 Export CSV
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setBulkModal(true); setBulkResult(null); setBulkEmails('') }}>
+            ✅ Mark Contacted
           </button>
           <button className="btn btn-primary" onClick={() => setModal('create')}>
             + Add Lead
@@ -254,13 +280,62 @@ export default function Leads() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Lead Modal */}
       {modal && (
         <LeadModal
           lead={modal === 'create' ? null : modal}
           onClose={() => setModal(null)}
           onSave={fetchLeads}
         />
+      )}
+
+      {/* Bulk Mark Contacted Modal */}
+      {bulkModal && (
+        <div className="modal-overlay" onClick={() => setBulkModal(false)}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>✅ Mark Emails as Contacted</h3>
+              <button className="modal-close" onClick={() => setBulkModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+                Paste email addresses (one per line, or comma-separated). All matching leads will be marked as <strong>Contacted</strong>.
+              </p>
+              <p style={{ marginBottom: 12, color: 'var(--text-muted)', fontSize: 12 }}>
+                💡 Get the list from Railway → Logs → search <code>[autopilot] ✓ Sent</code>
+              </p>
+              <textarea
+                className="form-control"
+                rows={10}
+                placeholder={"newsletter@example.com\nanother@domain.com\n..."}
+                value={bulkEmails}
+                onChange={e => setBulkEmails(e.target.value)}
+                style={{ fontFamily: 'monospace', fontSize: 12 }}
+              />
+              {bulkResult && (
+                <div className={`alert alert-${bulkResult.data?.updated > 0 ? 'success' : 'error'}`} style={{ marginTop: 10 }}>
+                  {bulkResult.message}
+                  {bulkResult.data?.not_found?.length > 0 && (
+                    <details style={{ marginTop: 6, fontSize: 11 }}>
+                      <summary>Unmatched ({bulkResult.data.not_found.length})</summary>
+                      <pre style={{ marginTop: 4 }}>{bulkResult.data.not_found.join('\n')}</pre>
+                    </details>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setBulkModal(false)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleBulkContacted}
+                disabled={bulkLoading || !bulkEmails.trim()}
+              >
+                {bulkLoading ? 'Updating…' : 'Mark as Contacted'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
