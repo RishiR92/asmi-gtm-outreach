@@ -144,11 +144,24 @@ def debug_db():
         except Exception as e:
             result["app_settings_cols_error"] = str(e)
 
-        # 2. Try querying AppSettings ORM
+        # 2. Try querying AppSettings ORM + full serialization
         try:
             from models import AppSettings
+            from schemas import AppSettingsResponse
             s = db.query(AppSettings).first()
             result["settings_query"] = "ok" if s else "no row"
+            if s:
+                result["settings_raw"] = {
+                    "imap_enabled": s.imap_enabled,
+                    "autopilot_enabled": s.autopilot_enabled,
+                    "daily_send_limit": s.daily_send_limit,
+                    "timezone": s.timezone,
+                }
+                try:
+                    result["settings_serialize"] = AppSettingsResponse.model_validate(s).model_dump()
+                    result["settings_serialize_ok"] = True
+                except Exception as e2:
+                    result["settings_serialize_error"] = str(e2)
         except Exception as e:
             result["settings_query_error"] = str(e)
 

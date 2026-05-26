@@ -155,14 +155,15 @@ class AppSettingsResponse(BaseModel):
     gmail_client_secret: Optional[str] = None
     gmail_refresh_token: Optional[str] = None
     sender_name: Optional[str] = None
-    daily_send_limit: int
-    followup1_days: int
-    followup2_days: int
-    send_hours_start: int
-    send_hours_end: int
-    timezone: str
-    imap_enabled: bool
-    autopilot_enabled: bool = False
+    # Nullable-safe integers (DB row may predate defaults)
+    daily_send_limit: Optional[int] = 20
+    followup1_days: Optional[int] = 4
+    followup2_days: Optional[int] = 9
+    send_hours_start: Optional[int] = 9
+    send_hours_end: Optional[int] = 17
+    timezone: Optional[str] = "America/Los_Angeles"
+    imap_enabled: Optional[bool] = False
+    autopilot_enabled: Optional[bool] = False
 
     class Config:
         from_attributes = True
