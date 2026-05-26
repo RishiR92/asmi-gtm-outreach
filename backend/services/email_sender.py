@@ -5,10 +5,27 @@ from sqlalchemy import func
 from datetime import date, datetime
 
 
+def _first_name(full_name: str) -> str:
+    """Extract first name from a full name — handles 'First Last', 'Last, First', etc."""
+    if not full_name:
+        return ""
+    name = full_name.strip()
+    # Handle "Last, First" format
+    if "," in name:
+        name = name.split(",", 1)[1].strip()
+    # Take the first word
+    first = name.split()[0] if name.split() else name
+    return first.capitalize()
+
+
 def render_template(body: str, lead, custom_line: str = "") -> str:
     if not body:
         return ""
-    result = body.replace("{{name}}", lead.name or "")
+    fname = _first_name(lead.name or "")
+    # {{name}} now renders first name only (natural, human-friendly)
+    result = body.replace("{{name}}", fname)
+    result = result.replace("{{first_name}}", fname)          # explicit alias
+    result = result.replace("{{full_name}}", lead.name or "")  # opt-in for full name
     result = result.replace("{{newsletter}}", lead.newsletter_name or "")
     result = result.replace("{{audience}}", str(lead.estimated_audience) if lead.estimated_audience else "")
     result = result.replace("{{custom_line}}", custom_line or "")

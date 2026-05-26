@@ -23,23 +23,23 @@ SEND_START_DATE = date(2026, 5, 26)   # Start fresh from Tuesday (today already 
 # May 25 emails were sent from ephemeral SQLite containers (now gone).
 # On the first Railway deploy after migrating to PostgreSQL, this runs once
 # to mark those leads as Contacted so they are never re-emailed.
-_HISTORICAL_SYNC_DATE = date(2026, 5, 25)
+_HISTORICAL_SYNC_CUTOFF = date(2026, 5, 27)   # run through May 26 (deploy landed on 26th)
 
 
 def sync_historical_sends_once(db):
     """
-    One-time recovery: mark today's already-sent leads as Contacted.
+    One-time recovery: mark May 25 already-sent leads as Contacted.
 
-    Fires only on May 25, 2026 and only when 0 leads are Contacted
-    (meaning PostgreSQL is fresh and the SQLite logs are gone).
-    Uses the same prioritizer order the autopilot would have used.
-    Safe no-op after today or after any lead is ever marked Contacted.
+    Fires on May 25 or May 26 (deploy landed on 26th) and only when
+    0 leads are Contacted — meaning PostgreSQL is fresh and SQLite logs
+    are gone. Uses the same prioritizer order the autopilot would have
+    used. Safe no-op from May 27 onward or once any lead is Contacted.
     """
     from models import Lead, AppSettings
     from services.prioritizer import get_tz_optimised_batch
 
-    if date.today() != _HISTORICAL_SYNC_DATE:
-        return  # only relevant on May 25
+    if date.today() >= _HISTORICAL_SYNC_CUTOFF:
+        return  # only relevant on May 25–26
 
     contacted_count = db.query(Lead).filter(Lead.status == "Contacted").count()
     if contacted_count > 0:
