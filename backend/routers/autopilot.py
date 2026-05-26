@@ -129,7 +129,7 @@ def run_now(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
 
     def _run():
         from services.auto_pilot import run_autopilot_cycle
-        run_autopilot_cycle()
+        run_autopilot_cycle(force=True)   # bypass autopilot_enabled gate
 
     background_tasks.add_task(_run)
     return {"data": {}, "message": "Autopilot cycle triggered — sending in background"}

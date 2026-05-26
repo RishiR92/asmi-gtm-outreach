@@ -87,7 +87,11 @@ async def start_autopilot():
             print(f"[autopilot] cycle error: {e}")
 
 
-def run_autopilot_cycle():
+def run_autopilot_cycle(force: bool = False):
+    """
+    Run one send cycle.
+    force=True: skip the autopilot_enabled gate (used by manual Run Now).
+    """
     from database import SessionLocal
     from models import AppSettings, EmailLog, Template, ScheduledEmail
     from services.prioritizer import get_tz_optimised_batch
@@ -97,11 +101,13 @@ def run_autopilot_cycle():
     try:
         settings = db.query(AppSettings).first()
         if not settings:
+            print("[autopilot] No settings found — skipping")
             return
-        if not getattr(settings, "autopilot_enabled", False):
+        if not force and not getattr(settings, "autopilot_enabled", False):
+            print("[autopilot] Autopilot disabled — skipping (use Run Now to force)")
             return
         if not _within_send_window():
-            print(f"[autopilot] Outside send window (9am–6pm IST) — skipping")
+            print(f"[autopilot] Outside send window (9am–6pm PT) — skipping")
             return
         if date.today() < SEND_START_DATE:
             print(f"[autopilot] Campaign starts {SEND_START_DATE} — today is {date.today()}, skipping")
