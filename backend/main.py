@@ -30,29 +30,37 @@ app.add_middleware(
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-# ── Safe column migrations (add new columns without Alembic) ─────────────────
-# PostgreSQL doesn't auto-add new model columns — we do it manually here.
-# Each ALTER is wrapped in try/except so re-runs are harmless.
-def _run_migrations():
+# ── Safe column migrations (works on all PostgreSQL versions) ─────────────────
+def _add_column_if_missing(conn, table: str, column: str, col_type: str):
+    """Add a column only if it doesn't already exist — checks information_schema."""
     from sqlalchemy import text
-    migrations = [
-        "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS resend_api_key VARCHAR(255)",
-        "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS gmail_client_id VARCHAR(512)",
-        "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS gmail_client_secret VARCHAR(512)",
-        "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS gmail_refresh_token TEXT",
+    exists = conn.execute(text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name=:t AND column_name=:c"
+    ), {"t": table, "c": column}).fetchone()
+    if not exists:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+        conn.commit()
+        print(f"[migration] added column {table}.{column}")
+
+def _run_migrations():
+    NEW_COLS = [
+        ("app_settings", "resend_api_key",    "VARCHAR(255)"),
+        ("app_settings", "gmail_client_id",   "VARCHAR(512)"),
+        ("app_settings", "gmail_client_secret","VARCHAR(512)"),
+        ("app_settings", "gmail_refresh_token","TEXT"),
     ]
     with engine.connect() as conn:
-        for sql in migrations:
+        for table, col, col_type in NEW_COLS:
             try:
-                conn.execute(text(sql))
-                conn.commit()
-            except Exception:
-                conn.rollback()
+                _add_column_if_missing(conn, table, col, col_type)
+            except Exception as e:
+                print(f"[migration] could not add {table}.{col}: {e}")
 
 try:
     _run_migrations()
 except Exception as _me:
-    print(f"[migration] warning: {_me}")
+    print(f"[migration] error: {_me}")
 
 # Include routers
 app.include_router(leads.router, prefix="/api/leads", tags=["leads"])
