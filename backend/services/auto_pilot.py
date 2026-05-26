@@ -64,17 +64,25 @@ def sync_historical_sends_once(db):
     print(f"[startup] ✓ Historical sync: marked {marked} leads as Contacted (recovered from SQLite wipe)")
 
 
-# ── Send window (PT) ──────────────────────────────────────────────────────────
-# Only send between 9am–6pm Pacific time — no overnight blasts
-SEND_TZ          = pytz.timezone("America/Los_Angeles")
-SEND_HOUR_START  = 9
-SEND_HOUR_END    = 18
+# ── Send window ───────────────────────────────────────────────────────────────
+# Reads timezone / hours from AppSettings so the Settings UI is the source of truth.
+# Falls back to PT 9am–6pm if settings are missing.
+_FALLBACK_TZ         = "America/Los_Angeles"
+_FALLBACK_HOUR_START = 9
+_FALLBACK_HOUR_END   = 18
 
 
-def _within_send_window() -> bool:
-    """Returns True if current PT time is within the allowed send window."""
-    now_pt = datetime.now(SEND_TZ)
-    return SEND_HOUR_START <= now_pt.hour < SEND_HOUR_END
+def _within_send_window(settings=None) -> bool:
+    """Returns True if current time is within the allowed send window per settings."""
+    tz_name    = (settings.timezone if settings and settings.timezone else _FALLBACK_TZ)
+    hour_start = (settings.send_hours_start if settings and settings.send_hours_start is not None else _FALLBACK_HOUR_START)
+    hour_end   = (settings.send_hours_end   if settings and settings.send_hours_end   is not None else _FALLBACK_HOUR_END)
+    try:
+        tz = pytz.timezone(tz_name)
+    except Exception:
+        tz = pytz.timezone(_FALLBACK_TZ)
+    now_local = datetime.now(tz)
+    return hour_start <= now_local.hour < hour_end
 
 
 async def start_autopilot():
@@ -108,13 +116,21 @@ def run_autopilot_cycle(force: bool = False):
         if not force and not getattr(settings, "autopilot_enabled", False):
             print("[autopilot] Autopilot disabled — skipping (use Run Now to force)")
             return
-        if not force and not _within_send_window():
-            print(f"[autopilot] Outside send window (9am–6pm PT) — skipping")
+        if not force and not _within_send_window(settings):
+            tz_name = settings.timezone or _FALLBACK_TZ
+            h_start = settings.send_hours_start or _FALLBACK_HOUR_START
+            h_end   = settings.send_hours_end   or _FALLBACK_HOUR_END
+            print(f"[autopilot] Outside send window ({h_start}–{h_end} {tz_name}) — skipping")
             return
 
-        resend_key = getattr(settings, "resend_api_key", None) or ""
-        if not resend_key and not settings.gmail_app_password:
-            print("[autopilot] No Resend API key and no Gmail app password — configure in Settings")
+        # Check at least one send method is configured
+        has_gmail_api = (getattr(settings, "gmail_client_id", None) and
+                         getattr(settings, "gmail_client_secret", None) and
+                         getattr(settings, "gmail_refresh_token", None))
+        has_resend    = bool(getattr(settings, "resend_api_key", None) or "")
+        has_smtp      = bool(settings.gmail_app_password)
+        if not has_gmail_api and not has_resend and not has_smtp:
+            print("[autopilot] No send method configured — add Gmail OAuth credentials in Settings")
             return
 
         # How many sent today already?
