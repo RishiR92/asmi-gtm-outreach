@@ -85,6 +85,20 @@ def _tz_in_window(tz_name: str) -> bool:
 
 # ── Public scoring API ────────────────────────────────────────────────────────
 
+# Generic email prefixes — deprioritised vs personal addresses
+_GENERIC_PREFIXES = (
+    'contact@', 'hello@', 'info@', 'admin@', 'team@', 'support@',
+    'editor@', 'newsletter@', 'hi@', 'mail@', 'press@', 'media@',
+    'marketing@', 'organizer@', 'manager@', 'group@', 'community@',
+    'members@',
+)
+
+def _is_personal_email(email: str) -> bool:
+    """Returns True if the email looks like a personal/named address."""
+    e = (email or '').lower()
+    return bool(e) and not any(e.startswith(p) for p in _GENERIC_PREFIXES)
+
+
 def score_lead(lead) -> tuple[float, float, bool]:
     """
     Returns (score, estimated_asmi_users, is_viable).
@@ -100,7 +114,8 @@ def score_lead(lead) -> tuple[float, float, bool]:
     s += _asmi_user_score(asmi_users)                              # 0–60 pts
     s += CATEGORY_SCORE.get(lead.category or "", 8)                # 0–25 pts
     s += 10 if getattr(lead, "priority", False) else 0             # 0–10 pts
-    s += 3 if lead.email else 0                                    # 0–5 pts
+    # Personal email gets +5; generic (contact@, hello@, …) gets 0
+    s += 5 if _is_personal_email(lead.email or "") else 0          # 0–5 pts (personal email bonus)
     s += 2 if lead.status == "New" else 1 if lead.status == "Email Found" else 0
 
     return round(s, 2), round(asmi_users, 1), is_viable
