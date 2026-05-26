@@ -22,12 +22,13 @@ export default function Settings() {
     sender_name: '',
     gmail_email: '',
     gmail_app_password: '',
+    resend_api_key: '',
     daily_send_limit: 20,
     followup1_days: 4,
     followup2_days: 9,
     send_hours_start: 9,
     send_hours_end: 17,
-    timezone: 'Asia/Kolkata',
+    timezone: 'America/Los_Angeles',
     imap_enabled: false,
   })
   const [showPassword, setShowPassword] = useState(false)
@@ -47,12 +48,13 @@ export default function Settings() {
         sender_name: d.sender_name || '',
         gmail_email: d.gmail_email || '',
         gmail_app_password: d.gmail_app_password || '',
+        resend_api_key: d.resend_api_key || '',
         daily_send_limit: d.daily_send_limit ?? 20,
         followup1_days: d.followup1_days ?? 4,
         followup2_days: d.followup2_days ?? 9,
         send_hours_start: d.send_hours_start ?? 9,
         send_hours_end: d.send_hours_end ?? 17,
-        timezone: d.timezone || 'Asia/Kolkata',
+        timezone: d.timezone || 'America/Los_Angeles',
         imap_enabled: d.imap_enabled ?? false,
       })
     } catch (e) {
@@ -116,14 +118,39 @@ export default function Settings() {
 
       <form onSubmit={handleSave}>
 
-        {/* Gmail Configuration */}
+        {/* Resend (Recommended) */}
         <div className="settings-section">
-          <h3>Gmail Configuration</h3>
+          <h3>📧 Resend API <span style={{fontSize:12,background:'#dcfce7',color:'#166534',padding:'2px 8px',borderRadius:4,marginLeft:8}}>Recommended</span></h3>
 
           <div className="alert alert-info mb-16">
-            <strong>Setup required:</strong> You need a Gmail App Password (not your regular password).
-            Go to <strong>Google Account → Security → 2-Step Verification → App passwords</strong>.
-            Generate one for "Mail" and paste it below.
+            <strong>Railway blocks SMTP outbound.</strong> Use <strong>Resend</strong> (free, 100 emails/day) instead —
+            it sends over HTTPS so Railway can't block it.{' '}
+            <a href="https://resend.com" target="_blank" rel="noreferrer" style={{color:'var(--primary)'}}>Sign up at resend.com</a>,
+            add <code>asmiai.com</code> as a verified domain, then paste your API key below.
+          </div>
+
+          <div className="form-group">
+            <label>Resend API Key</label>
+            <input
+              className="form-control"
+              type="password"
+              value={form.resend_api_key}
+              onChange={set('resend_api_key')}
+              placeholder="re_xxxxxxxxxxxxxxxxxxxx"
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              When set, Resend is used instead of Gmail SMTP. From address stays as your Gmail.
+            </div>
+          </div>
+        </div>
+
+        {/* Gmail Configuration */}
+        <div className="settings-section">
+          <h3>Gmail Configuration <span style={{fontSize:12,background:'#fef9c3',color:'#854d0e',padding:'2px 8px',borderRadius:4,marginLeft:8}}>Fallback only</span></h3>
+
+          <div className="alert alert-info mb-16">
+            <strong>Fallback:</strong> Used only when no Resend API key is set.
+            Requires a Gmail App Password from <strong>Google Account → Security → App passwords</strong>.
           </div>
 
           <div className="form-row">

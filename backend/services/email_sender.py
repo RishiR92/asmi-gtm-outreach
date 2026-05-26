@@ -1,4 +1,5 @@
 import smtplib
+import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sqlalchemy import func
@@ -32,6 +33,60 @@ def render_template(body: str, lead, custom_line: str = "") -> str:
     return result
 
 
+def _send_via_resend(to_email: str, subject: str, body: str,
+                     from_email: str, from_name: str, api_key: str):
+    """Send via Resend HTTPS API — works on Railway (no SMTP ports needed)."""
+    resp = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": f"{from_name} <{from_email}>",
+            "to": [to_email],
+            "subject": subject,
+            "text": body,
+        },
+        timeout=30,
+    )
+    if resp.status_code not in (200, 201):
+        raise Exception(f"Resend API error {resp.status_code}: {resp.text}")
+
+
+def _send_via_smtp(to_email: str, subject: str, body: str,
+                   from_email: str, from_name: str, password: str):
+    """Send via Gmail SMTP — fallback if Resend not configured."""
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{from_name} <{from_email}>"
+    msg["To"] = to_email
+    msg.attach(MIMEText(body, "plain"))
+
+    last_err = None
+    for port, use_ssl in [(587, False), (465, True)]:
+        try:
+            if use_ssl:
+                with smtplib.SMTP_SSL("smtp.gmail.com", port, timeout=30) as server:
+                    server.login(from_email, password)
+                    server.sendmail(from_email, to_email, msg.as_string())
+            else:
+                with smtplib.SMTP("smtp.gmail.com", port, timeout=30) as server:
+                    server.ehlo()
+                    server.starttls()
+                    server.ehlo()
+                    server.login(from_email, password)
+                    server.sendmail(from_email, to_email, msg.as_string())
+            last_err = None
+            break
+        except Exception as e:
+            last_err = e
+            continue
+
+    if last_err:
+        raise last_err
+
+
 def send_email(lead_id: int, subject: str, body: str, db, email_type: str = "initial"):
     from models import AppSettings, EmailLog, Lead
 
@@ -46,9 +101,6 @@ def send_email(lead_id: int, subject: str, body: str, db, email_type: str = "ini
     if not lead.email:
         raise Exception(f"Lead {lead.name} has no email address")
 
-    if not settings.gmail_email or not settings.gmail_app_password:
-        raise Exception("Gmail credentials not configured. Please update Settings.")
-
     # Check daily limit
     today_count = db.query(EmailLog).filter(
         EmailLog.status == "sent",
@@ -57,35 +109,20 @@ def send_email(lead_id: int, subject: str, body: str, db, email_type: str = "ini
     if today_count >= settings.daily_send_limit:
         raise Exception(f"Daily send limit of {settings.daily_send_limit} reached")
 
-    # Build email
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"{settings.sender_name} <{settings.gmail_email}>"
-    msg["To"] = lead.email
-    msg.attach(MIMEText(body, "plain"))
+    from_email  = settings.gmail_email or ""
+    from_name   = settings.sender_name or "Rishi"
+    resend_key  = getattr(settings, "resend_api_key", None) or ""
 
-    # Try port 587 (STARTTLS) first, fall back to 465 (SSL)
-    last_err = None
-    for port, use_ssl in [(587, False), (465, True)]:
-        try:
-            if use_ssl:
-                with smtplib.SMTP_SSL("smtp.gmail.com", port, timeout=30) as server:
-                    server.login(settings.gmail_email, settings.gmail_app_password)
-                    server.sendmail(settings.gmail_email, lead.email, msg.as_string())
-            else:
-                with smtplib.SMTP("smtp.gmail.com", port, timeout=30) as server:
-                    server.ehlo()
-                    server.starttls()
-                    server.ehlo()
-                    server.login(settings.gmail_email, settings.gmail_app_password)
-                    server.sendmail(settings.gmail_email, lead.email, msg.as_string())
-            last_err = None
-            break  # success
-        except Exception as e:
-            last_err = e
-            continue
-
-    if last_err:
+    try:
+        if resend_key:
+            # ── Preferred: Resend HTTPS (works on Railway, no SMTP port needed) ──
+            _send_via_resend(lead.email, subject, body, from_email, from_name, resend_key)
+        else:
+            # ── Fallback: Gmail SMTP ──
+            if not settings.gmail_app_password:
+                raise Exception("No Resend API key and no Gmail app password — configure one in Settings.")
+            _send_via_smtp(lead.email, subject, body, from_email, from_name, settings.gmail_app_password)
+    except Exception as last_err:
         log = EmailLog(
             lead_id=lead_id, email_type=email_type,
             sent_at=datetime.utcnow(), subject=subject, body=body,

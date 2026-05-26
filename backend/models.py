@@ -117,5 +117,6 @@ class AppSettings(Base):
     send_hours_start = Column(Integer, default=9)
     send_hours_end = Column(Integer, default=17)
     timezone = Column(String(50), default="America/Los_Angeles")
+    resend_api_key = Column(String(255))          # Resend HTTPS API (preferred over SMTP on Railway)
     imap_enabled = Column(Boolean, default=False)
     autopilot_enabled = Column(Boolean, default=False)
