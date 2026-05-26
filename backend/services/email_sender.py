@@ -1,10 +1,26 @@
 import base64
 import smtplib
+import os
 import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sqlalchemy import func
 from datetime import date, datetime
+
+_RAILWAY_URL = os.environ.get("RAILWAY_SYNC_URL", "").rstrip("/")
+
+def _mirror_status_to_railway(email: str, status: str):
+    """Fire-and-forget: mark this email as Contacted on Railway too."""
+    if not _RAILWAY_URL or not email:
+        return
+    try:
+        requests.post(
+            f"{_RAILWAY_URL}/api/leads/bulk-status",
+            json={"emails": [email], "status": status},
+            timeout=5,
+        )
+    except Exception:
+        pass  # never block a local send over a sync failure
 
 
 def _first_name(full_name: str) -> str:
@@ -197,3 +213,6 @@ def send_email(lead_id: int, subject: str, body: str, db, email_type: str = "ini
         status="sent",
     ))
     db.commit()
+
+    # ── Mirror status to Railway so both DBs stay in sync ─────────────────────
+    _mirror_status_to_railway(lead.email, "Contacted")
