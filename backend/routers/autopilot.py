@@ -135,6 +135,47 @@ def run_now(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     return {"data": {}, "message": "Autopilot cycle triggered — sending in background"}
 
 
+@router.post("/debug-send")
+def debug_send(db: Session = Depends(get_db)):
+    """
+    Synchronous dry-run: attempts to send ONE email to the top-ranked lead.
+    Returns the exact error if it fails — use this to diagnose SMTP issues.
+    """
+    from models import Template, Lead
+    from services.prioritizer import get_tz_optimised_batch
+    from services.email_sender import send_email, render_template
+
+    settings = db.query(AppSettings).first()
+    if not settings:
+        raise HTTPException(status_code=500, detail="No settings in DB")
+    if not settings.gmail_email or not settings.gmail_app_password:
+        raise HTTPException(status_code=500, detail="Gmail credentials missing")
+
+    template = db.query(Template).first()
+    if not template:
+        raise HTTPException(status_code=500, detail="No template in DB")
+
+    queue = get_tz_optimised_batch(db, limit=1)
+    if not queue:
+        raise HTTPException(status_code=500, detail="No eligible leads in queue")
+
+    lead, score, asmi_users, viable = queue[0]
+    subject = render_template(template.subject_a or "", lead)
+    body    = render_template(template.body or "", lead)
+
+    try:
+        send_email(lead.id, subject, body, db, email_type="initial")
+        lead.status = "Contacted"
+        lead.date_contacted = datetime.utcnow()
+        db.commit()
+        return {
+            "data": {"lead": lead.name, "email": lead.email, "subject": subject},
+            "message": f"✓ Email sent to {lead.name} ({lead.email})"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SMTP error: {str(e)}")
+
+
 @router.post("/quick-add")
 def quick_add_email(req: QuickAddRequest, db: Session = Depends(get_db)):
     """
