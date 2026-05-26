@@ -116,6 +116,6 @@ class AppSettings(Base):
     followup2_days = Column(Integer, default=9)
     send_hours_start = Column(Integer, default=9)
     send_hours_end = Column(Integer, default=17)
-    timezone = Column(String(50), default="Asia/Kolkata")
+    timezone = Column(String(50), default="America/Los_Angeles")
     imap_enabled = Column(Boolean, default=False)
     autopilot_enabled = Column(Boolean, default=False)

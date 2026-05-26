@@ -64,17 +64,17 @@ def sync_historical_sends_once(db):
     print(f"[startup] ✓ Historical sync: marked {marked} leads as Contacted (recovered from SQLite wipe)")
 
 
-# ── Send window (IST) ─────────────────────────────────────────────────────────
-# Only send between 9am–6pm India time — no overnight blasts
-SEND_TZ          = pytz.timezone("Asia/Kolkata")
+# ── Send window (PT) ──────────────────────────────────────────────────────────
+# Only send between 9am–6pm Pacific time — no overnight blasts
+SEND_TZ          = pytz.timezone("America/Los_Angeles")
 SEND_HOUR_START  = 9
 SEND_HOUR_END    = 18
 
 
 def _within_send_window() -> bool:
-    """Returns True if current IST time is within the allowed send window."""
-    now_ist = datetime.now(SEND_TZ)
-    return SEND_HOUR_START <= now_ist.hour < SEND_HOUR_END
+    """Returns True if current PT time is within the allowed send window."""
+    now_pt = datetime.now(SEND_TZ)
+    return SEND_HOUR_START <= now_pt.hour < SEND_HOUR_END
 
 
 async def start_autopilot():
