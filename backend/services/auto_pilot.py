@@ -78,13 +78,15 @@ def _within_send_window() -> bool:
 
 
 async def start_autopilot():
-    # Wait 30 minutes before first cycle — deploys must NOT trigger sends
+    # Wait 5 minutes after startup (lets Railway health-check pass; avoids deploy-time sends)
+    await asyncio.sleep(300)
     while True:
-        await asyncio.sleep(1800)
         try:
             await asyncio.to_thread(run_autopilot_cycle)
         except Exception as e:
             print(f"[autopilot] cycle error: {e}")
+        # Check every 15 minutes — sends only once per day (remaining=0 guard handles the rest)
+        await asyncio.sleep(900)
 
 
 def run_autopilot_cycle(force: bool = False):
@@ -122,9 +124,15 @@ def run_autopilot_cycle(force: bool = False):
             func.date(EmailLog.sent_at) == date.today()
         ).count()
 
-        remaining = (settings.daily_send_limit or 20) - today_sent
+        daily_limit = settings.daily_send_limit or 20
+        if today_sent > 0 and not force:
+            # Already sent at least one email today — done for the day
+            print(f"[autopilot] Already sent {today_sent} emails today — will retry tomorrow")
+            return
+
+        remaining = daily_limit - today_sent
         if remaining <= 0:
-            print(f"[autopilot] Daily limit reached ({settings.daily_send_limit}), skipping")
+            print(f"[autopilot] Daily limit reached ({daily_limit}), skipping")
             return
 
         # Get the single frozen template
