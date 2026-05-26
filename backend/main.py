@@ -43,6 +43,18 @@ app.include_router(autopilot.router, prefix="/api/autopilot", tags=["autopilot"]
 async def startup():
     from seed_data import seed
     seed()
+
+    # One-time recovery: mark May 25 historical sends as Contacted (SQLite logs gone)
+    from database import SessionLocal
+    from services.auto_pilot import sync_historical_sends_once
+    _db = SessionLocal()
+    try:
+        sync_historical_sends_once(_db)
+    except Exception as _e:
+        print(f"[startup] Historical sync error (non-fatal): {_e}")
+    finally:
+        _db.close()
+
     asyncio.create_task(start_scheduler())
     asyncio.create_task(start_reply_checker())
     asyncio.create_task(start_autopilot())

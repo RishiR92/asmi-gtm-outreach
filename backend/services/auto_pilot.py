@@ -19,6 +19,51 @@ from sqlalchemy import func
 # ── Send-start gate ───────────────────────────────────────────────────────────
 SEND_START_DATE = date(2026, 5, 26)   # Start fresh from Tuesday (today already sent 2x)
 
+# ── Historical sync ───────────────────────────────────────────────────────────
+# May 25 emails were sent from ephemeral SQLite containers (now gone).
+# On the first Railway deploy after migrating to PostgreSQL, this runs once
+# to mark those leads as Contacted so they are never re-emailed.
+_HISTORICAL_SYNC_DATE = date(2026, 5, 25)
+
+
+def sync_historical_sends_once(db):
+    """
+    One-time recovery: mark today's already-sent leads as Contacted.
+
+    Fires only on May 25, 2026 and only when 0 leads are Contacted
+    (meaning PostgreSQL is fresh and the SQLite logs are gone).
+    Uses the same prioritizer order the autopilot would have used.
+    Safe no-op after today or after any lead is ever marked Contacted.
+    """
+    from models import Lead, AppSettings
+    from services.prioritizer import get_tz_optimised_batch
+
+    if date.today() != _HISTORICAL_SYNC_DATE:
+        return  # only relevant on May 25
+
+    contacted_count = db.query(Lead).filter(Lead.status == "Contacted").count()
+    if contacted_count > 0:
+        print(f"[startup] Historical sync skipped — {contacted_count} leads already Contacted")
+        return
+
+    settings = db.query(AppSettings).first()
+    daily_limit = (settings.daily_send_limit if settings else 20) or 20
+
+    queue = get_tz_optimised_batch(db, limit=daily_limit)
+    if not queue:
+        print("[startup] Historical sync: no eligible leads found")
+        return
+
+    marked = 0
+    for lead, score, asmi_users, viable in queue:
+        lead.status = "Contacted"
+        lead.date_contacted = datetime.utcnow()
+        marked += 1
+
+    db.commit()
+    print(f"[startup] ✓ Historical sync: marked {marked} leads as Contacted (recovered from SQLite wipe)")
+
+
 # ── Send window (IST) ─────────────────────────────────────────────────────────
 # Only send between 9am–6pm India time — no overnight blasts
 SEND_TZ          = pytz.timezone("Asia/Kolkata")
