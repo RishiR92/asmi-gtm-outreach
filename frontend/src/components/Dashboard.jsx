@@ -392,22 +392,30 @@ export default function Dashboard() {
   async function handleRunNow() {
     setRunning(true); setRunMsg(null)
     try {
-      const res = await api.post('/autopilot/run-now')
-      setRunMsg({ type: 'success', text: '⚡ Sending in background — refreshing in 20s…' })
-      // Emails are sent async in background — wait then refresh to show updated counts
-      setTimeout(async () => {
-        await fetchAll()
-        await fetchSchedule()
-        setRunMsg(m => m ? { ...m, text: res.data.message + ' ✓ Done — check sent count above.' } : null)
-        setTimeout(() => setRunMsg(null), 5000)
-      }, 20000)
+      await api.post('/autopilot/run-now')
+      setRunMsg({ type: 'success', text: '⚡ Sending… checking progress' })
+      // Poll every 3s until sent count stops increasing (max 90s)
+      const startSent = apStatus?.sent_today ?? 0
+      let polls = 0
+      const poll = setInterval(async () => {
+        polls++
+        const r = await api.get('/autopilot/status').catch(() => null)
+        const nowSent = r?.data?.data?.sent_today ?? startSent
+        setApStatus(r?.data?.data ?? apStatus)
+        setRunMsg({ type: 'success', text: `⚡ Sending… ${nowSent} sent so far` })
+        if (nowSent >= (r?.data?.data?.daily_limit ?? 20) || polls >= 30) {
+          clearInterval(poll)
+          setRunning(false)
+          await fetchAll(); await fetchSchedule()
+          setRunMsg({ type: 'success', text: `✅ Done — ${nowSent} emails sent today` })
+          setTimeout(() => setRunMsg(null), 5000)
+        }
+      }, 3000)
     } catch (e) {
       setRunMsg({ type: 'error', text: e.response?.data?.detail || e.message })
       setRunning(false)
       setTimeout(() => setRunMsg(null), 6000)
-      return
     }
-    setTimeout(() => setRunning(false), 20000)
   }
 
   if (loading) return <div className="loading-spinner"><div className="spinner" /> Loading…</div>
@@ -449,16 +457,17 @@ export default function Dashboard() {
       {/* GTM Reach Metrics */}
       <div className="metrics-row mb-20">
         <div className="stat-card">
-          <div className="stat-label">Projected Asmi Users (3-day)</div>
-          <div className="stat-value" style={{ color: '#2563eb' }}>
-            {fmtAudience(Math.round(allScheduledLeads.reduce((s, l) => s + (l.estimated_asmi_users || 0), 0)))}
+          <div className="stat-label">Sent Today</div>
+          <div className="stat-value" style={{ color: apStatus?.sent_today > 0 ? '#059669' : '#334155' }}>
+            {apStatus?.sent_today ?? 0}
+            <span style={{ fontSize: 14, color: '#94a3b8', fontWeight: 400 }}>/{apStatus?.daily_limit ?? 20}</span>
           </div>
-          <div className="stat-sub">from {allScheduledLeads.filter(l => l.viable).length} viable partnerships planned</div>
+          <div className="stat-sub">{apStatus?.remaining_today ?? 0} remaining today</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Emails Sent This Week</div>
           <div className="stat-value">{stats.emails_sent_this_week}</div>
-          <div className="stat-sub">initial + follow-ups combined</div>
+          <div className="stat-sub">{byStatus['Contacted'] || 0} total contacted</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Reply Rate</div>
@@ -474,7 +483,7 @@ export default function Dashboard() {
           <div className="stat-value" style={{ color: '#d97706' }}>
             {apStatus?.eligible_leads ?? allScheduledLeads.length}
           </div>
-          <div className="stat-sub">with email, not yet contacted</div>
+          <div className="stat-sub">ready to contact</div>
         </div>
       </div>
 
@@ -508,7 +517,7 @@ export default function Dashboard() {
           </span>
         </div>
         <p style={{ fontSize: 12, color: '#64748b', marginBottom: 16, marginTop: 4 }}>
-          Sends begin Monday. Each day's list shows who gets emailed and their projected Asmi user contribution.
+          Each day's list shows who gets emailed and their projected Asmi user contribution. Order re-ranks at send time.
         </p>
         <ThreeDaySchedule schedule={schedule} loading={schedLoading} onRefresh={() => { fetchAll(); fetchSchedule() }} />
       </div>
