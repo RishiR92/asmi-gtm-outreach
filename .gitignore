@@ -7,7 +7,7 @@ __pycache__/
 backend/venv/
 backend/.env
 *.egg-info/
-dist/
+# dist/ — keep for non-frontend projects only
 build/
 
 # Node
