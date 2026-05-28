@@ -256,6 +256,55 @@ def run_lead_scout():
         except Exception as e:
             print(f"[scout] Google search scouting failed: {e}")
 
+        # ── Newsletter Author Seeds (highest priority — personal emails) ────────
+        print("[scout] Adding newsletter author seeds...")
+        try:
+            from .community_scrapers.community_seeds import get_newsletter_author_leads
+            from models import Lead
+
+            author_leads = get_newsletter_author_leads()
+            print(f"[scout] Found {len(author_leads)} newsletter author seeds")
+
+            for comm in author_leads:
+                has_email = bool(comm.get("manager_email"))
+
+                # Check if already in DB by newsletter name or email
+                existing = None
+                if comm.get("manager_email"):
+                    existing = db.query(Lead).filter(Lead.email == comm["manager_email"]).first()
+                if not existing:
+                    existing = db.query(Lead).filter(Lead.newsletter_name == comm["newsletter_name"]).first()
+                if not existing and comm.get("manager_name"):
+                    existing = db.query(Lead).filter(Lead.name == comm["manager_name"]).first()
+
+                if existing:
+                    # Update email if we have one and they don't
+                    if has_email and not existing.email:
+                        existing.email = comm["manager_email"]
+                        existing.status = "Email Found"
+                        db.commit()
+                        eligible_new += 1
+                    continue
+
+                lead = Lead(
+                    name=comm["manager_name"],
+                    newsletter_name=comm["newsletter_name"],
+                    url=comm.get("url", ""),
+                    estimated_audience=comm.get("members", 0),
+                    category="Newsletter",
+                    email=comm.get("manager_email", "") or "",
+                    status="Email Found" if has_email else "New",
+                    notes=f"[AUTO-SCOUT] {comm['description']} | Source: newsletter_seed",
+                )
+                new_leads.append(lead)
+                if has_email:
+                    eligible_new += 1
+                else:
+                    ineligible_new += 1
+
+        except Exception as e:
+            print(f"[scout] Newsletter author seeds failed: {e}")
+
         # ── Scout Community Seeds (reliable fallback) ────────────────────────
         print("[scout] Adding seed communities...")
         try:
