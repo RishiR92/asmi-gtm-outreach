@@ -34,6 +34,22 @@ def _first_name(full_name: str) -> str:
     return first.capitalize()
 
 
+_CHANNEL_ASK = {
+    "Creator":     "feature Asmi in a video or post",
+    "Community":   "share Asmi with your community",
+    "University":  "share Asmi with your club members",
+    "Accelerator": "share Asmi with your founders and portfolio",
+    "Directory":   "list Asmi on your platform",
+    "Newsletter":  "feature Asmi for your readers",
+    "Podcast":     "mention Asmi on your show — happy to come on as a guest too",
+    "Business Owner": "share Asmi with your network",
+}
+
+def _channel_ask(lead) -> str:
+    """Return a channel-specific call-to-action based on the lead's category."""
+    return _CHANNEL_ASK.get(getattr(lead, "category", "") or "", "explore a collaboration")
+
+
 def render_template(body: str, lead, custom_line: str = "") -> str:
     if not body:
         return ""
@@ -44,6 +60,7 @@ def render_template(body: str, lead, custom_line: str = "") -> str:
     result = result.replace("{{newsletter}}", lead.newsletter_name or "")
     result = result.replace("{{audience}}", str(lead.estimated_audience) if lead.estimated_audience else "")
     result = result.replace("{{custom_line}}", custom_line or "")
+    result = result.replace("{{channel_ask}}", _channel_ask(lead))
     return result
 
 

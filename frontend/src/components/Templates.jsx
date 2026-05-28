@@ -113,11 +113,40 @@ export default function Templates() {
             </div>
           </div>
 
+          {/* Channel-ask preview */}
+          <div className="card">
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', marginBottom: 4 }}>
+              {'{{channel_ask}}'} — auto-fills based on lead category
+            </div>
+            <p style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+              The line <em>"Would love to {'{{channel_ask}}'}"</em> gets personalised per contact type at send time.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
+              {[
+                { cat: 'Newsletter',  icon: '✉️',  ask: 'feature Asmi for your readers' },
+                { cat: 'Creator',     icon: '🎥',  ask: 'feature Asmi in a video or post' },
+                { cat: 'Community',   icon: '💬',  ask: 'share Asmi with your community' },
+                { cat: 'Podcast',     icon: '🎙️', ask: 'mention Asmi on your show — happy to come on as a guest too' },
+                { cat: 'University',  icon: '🎓',  ask: 'share Asmi with your club members' },
+                { cat: 'Accelerator', icon: '🚀',  ask: 'share Asmi with your founders and portfolio' },
+                { cat: 'Directory',   icon: '📂',  ask: 'list Asmi on your platform' },
+              ].map(({ cat, icon, ask }) => (
+                <div key={cat} style={{
+                  background: '#f8fafc', borderRadius: 8, padding: '10px 12px',
+                  border: '1px solid #e2e8f0', fontSize: 12,
+                }}>
+                  <div style={{ fontWeight: 700, color: '#334155', marginBottom: 4 }}>{icon} {cat}</div>
+                  <div style={{ color: '#475569', fontStyle: 'italic' }}>"{ask}"</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Available tokens */}
           <div className="card">
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', marginBottom: 10 }}>Available template variables</div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', marginBottom: 10 }}>All template variables</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {['{{name}}', '{{newsletter}}', '{{audience}}', '{{custom_line}}'].map(token => (
+              {['{{name}}', '{{newsletter}}', '{{audience}}', '{{channel_ask}}', '{{custom_line}}'].map(token => (
                 <code key={token} style={{
                   background: '#f1f5f9', border: '1px solid #e2e8f0',
                   borderRadius: 6, padding: '3px 10px', fontSize: 12, color: '#0f172a',
