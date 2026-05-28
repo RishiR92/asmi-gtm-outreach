@@ -267,6 +267,40 @@ def run_scout_now(background_tasks: BackgroundTasks):
     return {"data": {}, "message": "Lead scout started — new contacts will appear in Leads within ~60s"}
 
 
+@router.post("/sync-railway")
+def sync_railway_now(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    Background Railway → local sync (fire and forget).
+    Use /sync-railway-blocking for the 2-step Send Now flow.
+    """
+    def _run():
+        from database import SessionLocal
+        from services.railway_sync import sync_from_railway
+        _db = SessionLocal()
+        try:
+            sync_from_railway(_db)
+        finally:
+            _db.close()
+
+    background_tasks.add_task(_run)
+    return {"data": {}, "message": "Railway sync started — local DB will be updated within seconds"}
+
+
+@router.post("/sync-railway-blocking")
+def sync_railway_blocking(db: Session = Depends(get_db)):
+    """
+    Synchronous (blocking) Railway → local sync.
+    Called as Step 1 before Send Now so the UI can confirm sync is complete
+    before emails go out.
+    """
+    from services.railway_sync import sync_from_railway
+    result = sync_from_railway(db)
+    return {
+        "data": result,
+        "message": f"Sync complete — {result['updated']} updated, {result['imported']} imported",
+    }
+
+
 @router.delete("/priority/{lead_id}")
 def remove_priority(lead_id: int, db: Session = Depends(get_db)):
     lead = db.query(Lead).get(lead_id)

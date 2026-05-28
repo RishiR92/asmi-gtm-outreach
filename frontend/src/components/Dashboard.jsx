@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import api from '../api.js'
 
+// Only statuses the system tracks automatically
 const STATUS_COLORS = {
-  'New':              '#64748b',
-  'Email Found':      '#2563eb',
-  'Contacted':        '#d97706',
-  'Replied':          '#059669',
-  'Feature Confirmed':'#047857',
-  'Not Interested':   '#dc2626',
-  'No Response':      '#ea580c',
+  'New':       '#64748b',
+  'Contacted': '#d97706',
+  'Bounced':   '#dc2626',
 }
 
 function timeAgo(isoStr) {
@@ -392,9 +389,18 @@ export default function Dashboard() {
   async function handleRunNow() {
     setRunning(true); setRunMsg(null)
     try {
+      // ── Step 1: Pull latest data from Railway ──────────────────────────────
+      setRunMsg({ type: 'info', text: '🔄 Step 1/2 — Syncing Railway DB (email updates, new leads, statuses)…' })
+      const syncRes = await api.post('/autopilot/sync-railway-blocking')
+      const { updated, imported } = syncRes.data.data || {}
+      setRunMsg({ type: 'info', text: `✅ Step 1/2 done — ${updated} emails updated, ${imported} new leads imported. Starting sends…` })
+
+      // ── Step 2: Send emails ────────────────────────────────────────────────
+      await new Promise(r => setTimeout(r, 800))   // brief pause so user can read step 1 result
+      setRunMsg({ type: 'success', text: '⚡ Step 2/2 — Sending emails…' })
       await api.post('/autopilot/run-now')
-      setRunMsg({ type: 'success', text: '⚡ Sending… checking progress' })
-      // Poll every 3s until sent count stops increasing (max 90s)
+
+      // Poll every 3s until sent count stops rising (max 90s)
       const startSent = apStatus?.sent_today ?? 0
       let polls = 0
       const poll = setInterval(async () => {
@@ -408,7 +414,7 @@ export default function Dashboard() {
           setRunning(false)
           await fetchAll(); await fetchSchedule()
           setRunMsg({ type: 'success', text: `✅ Done — ${nowSent} emails sent today` })
-          setTimeout(() => setRunMsg(null), 5000)
+          setTimeout(() => setRunMsg(null), 6000)
         }
       }, 3000)
     } catch (e) {
@@ -423,8 +429,6 @@ export default function Dashboard() {
   if (!stats)  return null
 
   const byStatus = stats.by_status || {}
-  // Flatten schedule to get total projected asmi users across all 3 days
-  const allScheduledLeads = (schedule || []).flatMap(d => d.leads || [])
 
   return (
     <div>
@@ -434,14 +438,15 @@ export default function Dashboard() {
           <h2>Asmi GTM Dashboard</h2>
           <p>Cold outreach — prioritised by audience fit & conversion potential</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           <RunScoutBtn />
-          <button className="btn btn-secondary" onClick={() => { fetchAll(); fetchSchedule() }}>🔄 Refresh</button>
+          <SyncRailwayBtn onDone={() => { fetchAll(); fetchSchedule() }} />
+          <button className="btn btn-secondary" onClick={() => { fetchAll(); fetchSchedule() }}>↺ Refresh</button>
         </div>
       </div>
 
       {runMsg && (
-        <div className={`alert ${runMsg.type === 'success' ? 'alert-success' : 'alert-error'} mb-16`}>
+        <div className={`alert ${runMsg.type === 'success' ? 'alert-success' : runMsg.type === 'info' ? 'alert-info' : 'alert-error'} mb-16`}>
           {runMsg.text}
         </div>
       )}
@@ -457,7 +462,7 @@ export default function Dashboard() {
       {/* Quick Add */}
       <QuickAddPanel onAdded={() => { fetchAll(); fetchSchedule() }} />
 
-      {/* GTM Reach Metrics */}
+      {/* Stats — only what the system auto-tracks */}
       <div className="metrics-row mb-20">
         <div className="stat-card">
           <div className="stat-label">Sent Today</div>
@@ -465,40 +470,38 @@ export default function Dashboard() {
             {apStatus?.sent_today ?? 0}
             <span style={{ fontSize: 14, color: '#94a3b8', fontWeight: 400 }}>/{apStatus?.daily_limit ?? 20}</span>
           </div>
-          <div className="stat-sub">{apStatus?.remaining_today ?? 0} remaining today</div>
+          <div className="stat-sub">{apStatus?.remaining_today ?? 0} slots remaining</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Emails Sent This Week</div>
+          <div className="stat-label">Sent This Week</div>
           <div className="stat-value">{stats.emails_sent_this_week}</div>
-          <div className="stat-sub">{byStatus['Contacted'] || 0} total contacted</div>
+          <div className="stat-sub">via this system</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Reply Rate</div>
-          <div className="stat-value" style={{ color: '#059669' }}>
-            {(stats.reply_rate * 100).toFixed(1)}%
-          </div>
-          <div className="stat-sub">
-            {(byStatus['Replied'] || 0) + (byStatus['Feature Confirmed'] || 0)} replied
-          </div>
+          <div className="stat-label">Total Contacted</div>
+          <div className="stat-value" style={{ color: '#d97706' }}>{byStatus['Contacted'] || 0}</div>
+          <div className="stat-sub">emails delivered</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Eligible Leads</div>
-          <div className="stat-value" style={{ color: '#d97706' }}>
-            {apStatus?.eligible_leads ?? allScheduledLeads.length}
+          <div className="stat-label">Bounced</div>
+          <div className="stat-value" style={{ color: byStatus['Bounced'] > 0 ? '#dc2626' : '#334155' }}>
+            {byStatus['Bounced'] || 0}
           </div>
-          <div className="stat-sub">ready to contact</div>
+          <div className="stat-sub">bad addresses</div>
         </div>
       </div>
 
-      {/* Pipeline */}
+      {/* Pipeline — auto-tracked statuses only */}
       <div className="section-title">Pipeline</div>
       <div className="status-grid mb-20">
-        {['New','Email Found','Contacted','Replied','Feature Confirmed','Not Interested','No Response'].map(s => (
-          <div className="status-card" key={s}>
-            <div className="status-count" style={{ color: STATUS_COLORS[s] || '#334155' }}>
-              {byStatus[s] || 0}
-            </div>
-            <div className="status-label">{s}</div>
+        {[
+          { key: 'New',       label: 'New',            color: '#64748b' },
+          { key: 'Contacted', label: 'Contacted',       color: '#d97706' },
+          { key: 'Bounced',   label: 'Bounced',         color: '#dc2626' },
+        ].map(({ key, label, color }) => (
+          <div className="status-card" key={key}>
+            <div className="status-count" style={{ color }}>{byStatus[key] || 0}</div>
+            <div className="status-label">{label}</div>
           </div>
         ))}
         <div className="status-card">
@@ -613,6 +616,44 @@ function RunScoutBtn() {
       title="Find new newsletter contacts now (no 3-day wait)">
       {state === 'running' ? '🔍 Scouting…' : state === 'done' ? '✅ Scout done' : '🔍 Run Scout'}
     </button>
+  )
+}
+
+function SyncRailwayBtn({ onDone }) {
+  const [state, setState] = useState('idle') // idle | syncing | done | error
+  const [msg, setMsg] = useState('')
+
+  async function run() {
+    setState('syncing'); setMsg('')
+    try {
+      await api.post('/autopilot/sync-railway')
+      // Poll autopilot status to reflect updated counts after sync
+      setState('done')
+      setMsg('✅ Synced — email addresses & statuses updated from Railway')
+      setTimeout(() => { setState('idle'); setMsg(''); if (onDone) onDone() }, 4000)
+    } catch (e) {
+      setState('error')
+      setMsg('Sync failed: ' + (e.response?.data?.detail || e.message))
+      setTimeout(() => { setState('idle'); setMsg('') }, 5000)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+      <button
+        className="btn btn-secondary"
+        onClick={run}
+        disabled={state === 'syncing'}
+        title="Pull latest email addresses & statuses from Railway into local DB"
+      >
+        {state === 'syncing' ? '🔄 Syncing…' : state === 'done' ? '✅ Synced' : '🔄 Sync Railway'}
+      </button>
+      {msg && (
+        <span style={{ fontSize: 11, color: state === 'error' ? '#dc2626' : '#059669', maxWidth: 240, textAlign: 'right' }}>
+          {msg}
+        </span>
+      )}
+    </div>
   )
 }
 

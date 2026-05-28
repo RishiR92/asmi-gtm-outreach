@@ -106,9 +106,19 @@ def run_autopilot_cycle(force: bool = False):
     from models import AppSettings, EmailLog, Template, ScheduledEmail
     from services.prioritizer import get_tz_optimised_batch
     from services.email_sender import send_email, render_template
+    from services.railway_sync import sync_from_railway
 
     db = SessionLocal()
     try:
+        # ── Always sync from Railway first ────────────────────────────────────
+        # Picks up email addresses your team updated on Railway dashboard,
+        # new leads they added, and Contacted/Bounced statuses — so local DB
+        # is always fresh before we pick the send queue.
+        try:
+            sync_from_railway(db)
+        except Exception as sync_err:
+            print(f"[autopilot] Railway sync failed (continuing anyway): {sync_err}")
+
         settings = db.query(AppSettings).first()
         if not settings:
             print("[autopilot] No settings found — skipping")

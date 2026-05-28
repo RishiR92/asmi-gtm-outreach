@@ -314,6 +314,13 @@ def run_lead_scout():
 
             if new_eligible_total < target_eligible:
                 print(f"[scout] ⚠️  Still below target. Consider running another scout cycle soon.")
+
+            # ── Push new leads to Railway so both DBs stay in sync ──────────
+            try:
+                from services.railway_sync import push_new_leads_to_railway
+                push_new_leads_to_railway(db, new_leads)
+            except Exception as push_err:
+                print(f"[scout] Railway push failed (leads saved locally): {push_err}")
         else:
             print("[scout] No new communities found this cycle")
 

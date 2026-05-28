@@ -34,6 +34,7 @@ class LeadUpdate(BaseModel):
     template_id: Optional[int] = None
     ab_variant: Optional[str] = None
     follow_up_due: Optional[datetime] = None
+    bounced_at: Optional[datetime] = None
 
 
 class LeadStatusUpdate(BaseModel):

@@ -93,6 +93,70 @@ function ContactedTab() {
   )
 }
 
+// ── Bounced Row ───────────────────────────────────────────────────────────────
+function BouncedRow({ lead, onMoved }) {
+  const [editing, setEditing] = useState(false)
+  const [emailVal, setEmailVal] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function startEdit() {
+    setEmailVal('')   // blank — user types the new address
+    setEditing(true)
+  }
+
+  async function saveEmail() {
+    const trimmed = emailVal.trim()
+    if (!trimmed) return
+    setSaving(true)
+    try {
+      // Update email + reset status to "Email Found" so it lands in To Be Contacted
+      await api.put(`/leads/${lead.id}`, {
+        email: trimmed,
+        status: 'Email Found',
+        bounced_at: null,
+      })
+      onMoved()   // refresh bounced list (lead disappears from here)
+    } catch (e) {
+      alert('Save failed: ' + (e.response?.data?.detail || e.message))
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <tr>
+      <td><strong>{lead.name}</strong></td>
+      <td style={{ fontSize: 12, color: '#dc2626', textDecoration: 'line-through' }}>{lead.email}</td>
+      <td style={{ fontSize: 13, color: '#64748b' }}>{lead.newsletter_name || '—'}</td>
+      <td style={{ fontSize: 12, color: '#64748b' }}>{timeAgo(lead.bounced_at)}</td>
+      <td>
+        {editing ? (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              autoFocus
+              value={emailVal}
+              onChange={e => setEmailVal(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveEmail(); if (e.key === 'Escape') setEditing(false) }}
+              placeholder="new@email.com"
+              style={{ fontSize: 12, padding: '3px 8px', border: '1px solid #93c5fd', borderRadius: 4, width: 190 }}
+            />
+            <button onClick={saveEmail} disabled={saving || !emailVal.trim()} style={{
+              fontSize: 11, padding: '3px 10px', background: saving ? '#94a3b8' : '#16a34a',
+              color: '#fff', border: 'none', borderRadius: 4, cursor: saving ? 'not-allowed' : 'pointer',
+            }}>{saving ? '…' : '✓ Save'}</button>
+            <button onClick={() => setEditing(false)} style={{
+              fontSize: 11, padding: '3px 8px', background: '#f1f5f9', border: 'none', borderRadius: 4, cursor: 'pointer',
+            }}>✕</button>
+          </div>
+        ) : (
+          <button onClick={startEdit} style={{
+            fontSize: 11, padding: '4px 12px', background: '#eff6ff', color: '#2563eb',
+            border: '1px solid #bfdbfe', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+          }}>📧 Update Email</button>
+        )}
+      </td>
+    </tr>
+  )
+}
+
 // ── Bounced Tab ───────────────────────────────────────────────────────────────
 function BouncedTab() {
   const [leads, setLeads] = useState([])
@@ -115,7 +179,7 @@ function BouncedTab() {
   return (
     <div>
       <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 16px', fontSize: 13, color: '#991b1b', marginBottom: 16 }}>
-        ⚠️ Hard bounces (550 errors) are detected automatically at send time. These addresses no longer exist — update them with a correct email.
+        ⚠️ Hard bounces detected at send time. Update the email address — the lead will automatically move back to <strong>To Be Contacted</strong>.
       </div>
       <div style={{ color: '#64748b', fontSize: 13, marginBottom: 12 }}>{total} bounced</div>
       {loading ? <div className="loading-spinner"><div className="spinner" /></div> : total === 0 ? (
@@ -125,15 +189,10 @@ function BouncedTab() {
       ) : (
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Name</th><th>Email</th><th>Newsletter</th><th>Bounced</th></tr></thead>
+            <thead><tr><th>Name</th><th>Bad Email</th><th>Newsletter</th><th>Bounced</th><th>Fix</th></tr></thead>
             <tbody>
               {leads.map(l => (
-                <tr key={l.id}>
-                  <td><strong>{l.name}</strong></td>
-                  <td style={{ fontSize: 12, color: '#dc2626' }}>{l.email}</td>
-                  <td style={{ fontSize: 13, color: '#64748b' }}>{l.newsletter_name || '—'}</td>
-                  <td style={{ fontSize: 12, color: '#64748b' }}>{timeAgo(l.bounced_at)}</td>
-                </tr>
+                <BouncedRow key={l.id} lead={l} onMoved={() => { setPage(1); load() }} />
               ))}
             </tbody>
           </table>
