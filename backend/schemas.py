@@ -62,6 +62,7 @@ class LeadResponse(BaseModel):
     follow_up_due: Optional[datetime] = None
     template_id: Optional[int] = None
     ab_variant: Optional[str] = None
+    bounced_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

@@ -1,342 +1,295 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import api from '../api.js'
 import LeadModal from './LeadModal.jsx'
 
-const STATUS_BADGE = {
-  'New': 'badge-new',
-  'Email Found': 'badge-email-found',
-  'Contacted': 'badge-contacted',
-  'Replied': 'badge-replied',
-  'Feature Confirmed': 'badge-feature-confirmed',
-  'Not Interested': 'badge-not-interested',
-  'No Response': 'badge-no-response',
-}
-
-const STATUSES = ['', 'New', 'Email Found', 'Contacted', 'Replied', 'Feature Confirmed', 'Not Interested', 'No Response']
-const CATEGORIES = ['', 'AI Tools', 'Productivity', 'Indian-Origin', 'Startup-Founder', 'Business Owner', 'Niche']
-
-function formatNum(n) {
+function fmt(n) {
   if (!n) return '—'
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
-  if (n >= 1000) return (n / 1000).toFixed(0) + 'K'
+  if (n >= 1000) return Math.round(n / 1000) + 'K'
   return n
 }
 
-export default function Leads() {
+function timeAgo(iso) {
+  if (!iso) return '—'
+  const d = Math.floor((Date.now() - new Date(iso + 'Z')) / 86400000)
+  return d === 0 ? 'Today' : d === 1 ? 'Yesterday' : `${d}d ago`
+}
+
+const GENERIC = ['contact@','hello@','info@','admin@','team@','support@','editor@','newsletter@','hi@','mail@','press@','media@']
+
+function isGeneric(email) {
+  return email && GENERIC.some(p => email.toLowerCase().startsWith(p))
+}
+
+function Pagination({ page, total, per, onChange }) {
+  const pages = Math.ceil(total / per)
+  if (pages <= 1) return null
+  return (
+    <div style={{ display: 'flex', gap: 8, padding: '12px 0', justifyContent: 'center', alignItems: 'center' }}>
+      <button onClick={() => onChange(page - 1)} disabled={page === 1} className="btn btn-ghost" style={{ padding: '4px 12px', fontSize: 13 }}>← Prev</button>
+      <span style={{ fontSize: 13, color: '#64748b' }}>Page {page} of {pages} ({total} total)</span>
+      <button onClick={() => onChange(page + 1)} disabled={page === pages} className="btn btn-ghost" style={{ padding: '4px 12px', fontSize: 13 }}>Next →</button>
+    </div>
+  )
+}
+
+// ── Contacted Tab ─────────────────────────────────────────────────────────────
+function ContactedTab() {
   const [leads, setLeads] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [modal, setModal] = useState(null) // null | 'create' | lead object
-  const [actionMsg, setActionMsg] = useState(null)
-  const [bulkModal, setBulkModal] = useState(false)
-  const [bulkEmails, setBulkEmails] = useState('')
-  const [bulkLoading, setBulkLoading] = useState(false)
-  const [bulkResult, setBulkResult] = useState(null)
-  const fileInputRef = useRef()
-  const PER_PAGE = 25
+  const [loading, setLoading] = useState(true)
+  const PER = 25
 
-  async function fetchLeads() {
+  async function load() {
     setLoading(true)
-    setError(null)
     try {
-      const params = { page, per_page: PER_PAGE }
-      if (search) params.search = search
-      if (statusFilter) params.status = statusFilter
-      if (categoryFilter) params.category = categoryFilter
-      const res = await api.get('/leads', { params })
-      setLeads(res.data.data || [])
-      setTotal(res.data.total || 0)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+      const p = { page, per_page: PER, status: 'Contacted,Replied,Feature Confirmed' }
+      if (search) p.search = search
+      const r = await api.get('/leads', { params: p })
+      setLeads(r.data.data || [])
+      setTotal(r.data.total || 0)
+    } finally { setLoading(false) }
   }
 
-  useEffect(() => { fetchLeads() }, [page, statusFilter, categoryFilter])
-
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => { setPage(1); fetchLeads() }, 350)
-    return () => clearTimeout(t)
-  }, [search])
-
-  async function quickStatus(leadId, status) {
-    try {
-      await api.patch(`/leads/${leadId}/status`, { status })
-      setActionMsg({ type: 'success', text: `Marked as ${status}` })
-      setTimeout(() => setActionMsg(null), 2000)
-      fetchLeads()
-    } catch (e) {
-      setActionMsg({ type: 'error', text: e.message })
-    }
-  }
-
-  async function deleteLead(lead) {
-    if (!window.confirm(`Delete "${lead.name}"? This cannot be undone.`)) return
-    try {
-      await api.delete(`/leads/${lead.id}`)
-      fetchLeads()
-    } catch (e) {
-      setActionMsg({ type: 'error', text: e.message })
-    }
-  }
-
-  async function handleImport(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    const fd = new FormData()
-    fd.append('file', file)
-    try {
-      const res = await api.post('/leads/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      setActionMsg({ type: 'success', text: res.data.message })
-      fetchLeads()
-    } catch (e) {
-      setActionMsg({ type: 'error', text: e.message })
-    } finally {
-      e.target.value = ''
-    }
-  }
-
-  async function handleExport() {
-    try {
-      const res = await api.get('/leads/export', { responseType: 'blob' })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'leads_export.csv'
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      setActionMsg({ type: 'error', text: e.message })
-    }
-  }
-
-  async function handleBulkContacted() {
-    const emails = bulkEmails
-      .split(/[\n,;]+/)
-      .map(e => e.trim())
-      .filter(Boolean)
-    if (!emails.length) return
-    setBulkLoading(true)
-    setBulkResult(null)
-    try {
-      const res = await api.post('/leads/bulk-status', { emails, status: 'Contacted' })
-      setBulkResult(res.data)
-      fetchLeads()
-    } catch (e) {
-      setBulkResult({ message: e.message })
-    } finally {
-      setBulkLoading(false)
-    }
-  }
-
-  const totalPages = Math.ceil(total / PER_PAGE)
+  useEffect(() => { load() }, [page])
+  useEffect(() => { const t = setTimeout(() => { setPage(1); load() }, 350); return () => clearTimeout(t) }, [search])
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h2>Leads</h2>
-          <p>{total} total leads</p>
-        </div>
-        <div className="btn-row">
-          <button className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current.click()}>
-            📥 Import CSV
-          </button>
-          <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImport} />
-          <button className="btn btn-secondary btn-sm" onClick={handleExport}>
-            📤 Export CSV
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => { setBulkModal(true); setBulkResult(null); setBulkEmails('') }}>
-            ✅ Mark Contacted
-          </button>
-          <button className="btn btn-primary" onClick={() => setModal('create')}>
-            + Add Lead
-          </button>
-        </div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
+        <input className="form-input" placeholder="Search…" value={search}
+          onChange={e => setSearch(e.target.value)} style={{ maxWidth: 260 }} />
+        <span style={{ color: '#64748b', fontSize: 13 }}>{total} leads contacted</span>
       </div>
-
-      {actionMsg && (
-        <div className={`alert alert-${actionMsg.type === 'success' ? 'success' : 'error'}`}>
-          {actionMsg.text}
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="search-bar">
-        <div className="search-input-wrapper" style={{ flex: 2 }}>
-          <span className="search-icon">🔍</span>
-          <input
-            className="form-control"
-            placeholder="Search leads, newsletters, emails..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <select className="form-control" style={{ width: 180 }} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
-          <option value="">All Statuses</option>
-          {STATUSES.filter(Boolean).map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select className="form-control" style={{ width: 180 }} value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setPage(1) }}>
-          <option value="">All Categories</option>
-          {CATEGORIES.filter(Boolean).map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
-
-      {/* Table */}
-      {loading ? (
-        <div className="loading-spinner"><div className="spinner" /> Loading leads...</div>
-      ) : error ? (
-        <div className="alert alert-error">{error}</div>
-      ) : leads.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">👥</div>
-          <h3>No leads found</h3>
-          <p>Add your first lead or import a CSV file</p>
-        </div>
-      ) : (
+      {loading ? <div className="loading-spinner"><div className="spinner" /></div> : (
         <div className="table-wrapper">
           <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Newsletter</th>
-                <th>Audience</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Email</th>
-                <th>Follow-up Due</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Name</th><th>Newsletter</th><th>Email</th><th>Status</th><th>Contacted</th><th>Audience</th></tr></thead>
             <tbody>
-              {leads.map(lead => (
-                <tr key={lead.id} onClick={() => setModal(lead)} style={{ cursor: 'pointer' }}>
+              {leads.map(l => (
+                <tr key={l.id}>
+                  <td><strong>{l.name}</strong></td>
+                  <td style={{ color: '#64748b', fontSize: 13 }}>{l.newsletter_name || '—'}</td>
+                  <td style={{ fontSize: 12 }}>{l.email || '—'}</td>
                   <td>
-                    <strong>{lead.name}</strong>
-                    {lead.twitter_handle && <div className="td-muted">{lead.twitter_handle}</div>}
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                      background: l.status === 'Replied' ? '#dcfce7' : l.status === 'Feature Confirmed' ? '#bbf7d0' : '#fef9c3',
+                      color: l.status === 'Replied' ? '#15803d' : l.status === 'Feature Confirmed' ? '#14532d' : '#854d0e',
+                    }}>{l.status}</span>
                   </td>
-                  <td>
-                    {lead.newsletter_name && <span className="truncate">{lead.newsletter_name}</span>}
-                    {lead.url && <div className="td-muted">{lead.url}</div>}
-                  </td>
-                  <td className="td-muted">{formatNum(lead.estimated_audience)}</td>
-                  <td className="td-muted">{lead.category}</td>
-                  <td>
-                    <span className={`badge ${STATUS_BADGE[lead.status] || 'badge-new'}`}>
-                      {lead.status}
-                    </span>
-                  </td>
-                  <td className="td-muted">
-                    {lead.email
-                      ? <span className="truncate">{lead.email}</span>
-                      : <span style={{ color: '#f59e0b' }}>{lead.contact_method}</span>
-                    }
-                  </td>
-                  <td className="td-muted">
-                    {lead.follow_up_due
-                      ? new Date(lead.follow_up_due).toLocaleDateString()
-                      : '—'}
-                  </td>
-                  <td onClick={e => e.stopPropagation()}>
-                    <div className="td-actions">
-                      <button className="btn btn-xs btn-ghost" onClick={() => setModal(lead)}>Edit</button>
-                      {lead.status !== 'Replied' && (
-                        <button className="btn btn-xs btn-success" onClick={() => quickStatus(lead.id, 'Replied')}>Replied</button>
-                      )}
-                      {lead.status !== 'Not Interested' && (
-                        <button className="btn btn-xs btn-danger" onClick={() => quickStatus(lead.id, 'Not Interested')}>✗</button>
-                      )}
-                      <button
-                        className="btn btn-xs btn-danger"
-                        style={{ opacity: 0.7 }}
-                        onClick={() => deleteLead(lead)}
-                        title="Delete lead permanently"
-                      >🗑</button>
-                    </div>
-                  </td>
+                  <td style={{ fontSize: 12, color: '#64748b' }}>{timeAgo(l.date_contacted)}</td>
+                  <td style={{ fontSize: 12, color: '#64748b' }}>{fmt(l.estimated_audience)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <Pagination page={page} total={total} per={PER} onChange={setPage} />
         </div>
       )}
+    </div>
+  )
+}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="pagination">
-          <span className="pagination-info">
-            {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
-          </span>
-          <button className="btn btn-sm btn-ghost" disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Page {page} of {totalPages}</span>
-          <button className="btn btn-sm btn-ghost" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
+// ── Bounced Tab ───────────────────────────────────────────────────────────────
+function BouncedTab() {
+  const [leads, setLeads] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const PER = 25
+
+  async function load() {
+    setLoading(true)
+    try {
+      const r = await api.get('/leads', { params: { page, per_page: PER, status: 'Bounced' } })
+      setLeads(r.data.data || [])
+      setTotal(r.data.total || 0)
+    } finally { setLoading(false) }
+  }
+
+  useEffect(() => { load() }, [page])
+
+  return (
+    <div>
+      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 16px', fontSize: 13, color: '#991b1b', marginBottom: 16 }}>
+        ⚠️ Hard bounces (550 errors) are detected automatically at send time. These addresses no longer exist — update them with a correct email.
+      </div>
+      <div style={{ color: '#64748b', fontSize: 13, marginBottom: 12 }}>{total} bounced</div>
+      {loading ? <div className="loading-spinner"><div className="spinner" /></div> : total === 0 ? (
+        <div className="empty-state" style={{ padding: 40 }}>
+          <div className="empty-icon">✅</div><p>No bounces detected yet</p>
+        </div>
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Newsletter</th><th>Bounced</th></tr></thead>
+            <tbody>
+              {leads.map(l => (
+                <tr key={l.id}>
+                  <td><strong>{l.name}</strong></td>
+                  <td style={{ fontSize: 12, color: '#dc2626' }}>{l.email}</td>
+                  <td style={{ fontSize: 13, color: '#64748b' }}>{l.newsletter_name || '—'}</td>
+                  <td style={{ fontSize: 12, color: '#64748b' }}>{timeAgo(l.bounced_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination page={page} total={total} per={PER} onChange={setPage} />
         </div>
       )}
+    </div>
+  )
+}
 
-      {/* Lead Modal */}
-      {modal && (
-        <LeadModal
-          lead={modal === 'create' ? null : modal}
-          onClose={() => setModal(null)}
-          onSave={fetchLeads}
-        />
-      )}
+// ── To Be Contacted Tab ───────────────────────────────────────────────────────
+function LeadRow({ lead, onSaved }) {
+  const [editing, setEditing] = useState(false)
+  const [emailVal, setEmailVal] = useState(lead.email || '')
+  const gen = isGeneric(lead.email)
 
-      {/* Bulk Mark Contacted Modal */}
-      {bulkModal && (
-        <div className="modal-overlay" onClick={() => setBulkModal(false)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>✅ Mark Emails as Contacted</h3>
-              <button className="modal-close" onClick={() => setBulkModal(false)}>×</button>
-            </div>
-            <div className="modal-body">
-              <p style={{ marginBottom: 8, color: 'var(--text-muted)', fontSize: 13 }}>
-                Paste email addresses (one per line, or comma-separated). All matching leads will be marked as <strong>Contacted</strong>.
-              </p>
-              <p style={{ marginBottom: 12, color: 'var(--text-muted)', fontSize: 12 }}>
-                💡 Get the list from Railway → Logs → search <code>[autopilot] ✓ Sent</code>
-              </p>
-              <textarea
-                className="form-control"
-                rows={10}
-                placeholder={"newsletter@example.com\nanother@domain.com\n..."}
-                value={bulkEmails}
-                onChange={e => setBulkEmails(e.target.value)}
-                style={{ fontFamily: 'monospace', fontSize: 12 }}
-              />
-              {bulkResult && (
-                <div className={`alert alert-${bulkResult.data?.updated > 0 ? 'success' : 'error'}`} style={{ marginTop: 10 }}>
-                  {bulkResult.message}
-                  {bulkResult.data?.not_found?.length > 0 && (
-                    <details style={{ marginTop: 6, fontSize: 11 }}>
-                      <summary>Unmatched ({bulkResult.data.not_found.length})</summary>
-                      <pre style={{ marginTop: 4 }}>{bulkResult.data.not_found.join('\n')}</pre>
-                    </details>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setBulkModal(false)}>Cancel</button>
-              <button
-                className="btn btn-primary"
-                onClick={handleBulkContacted}
-                disabled={bulkLoading || !bulkEmails.trim()}
-              >
-                {bulkLoading ? 'Updating…' : 'Mark as Contacted'}
-              </button>
-            </div>
+  async function saveEmail() {
+    try {
+      await api.put(`/leads/${lead.id}`, { email: emailVal, status: emailVal ? 'Email Found' : 'New' })
+      setEditing(false)
+      onSaved()
+    } catch (e) { alert(e.message) }
+  }
+
+  async function skip() {
+    if (!window.confirm(`Skip ${lead.name}?`)) return
+    try { await api.put(`/leads/${lead.id}`, { status: 'Not Interested' }); onSaved() }
+    catch (e) { alert(e.message) }
+  }
+
+  return (
+    <tr>
+      <td><strong>{lead.name}</strong></td>
+      <td style={{ fontSize: 13, color: '#64748b' }}>{lead.newsletter_name || '—'}</td>
+      <td>
+        {editing ? (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input value={emailVal} onChange={e => setEmailVal(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveEmail()}
+              style={{ fontSize: 12, padding: '3px 8px', border: '1px solid #93c5fd', borderRadius: 4, width: 200 }} />
+            <button onClick={saveEmail} style={{ fontSize: 11, padding: '2px 8px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>✓</button>
+            <button onClick={() => setEditing(false)} style={{ fontSize: 11, padding: '2px 6px', background: '#f1f5f9', border: 'none', borderRadius: 4, cursor: 'pointer' }}>✕</button>
           </div>
+        ) : (
+          <span style={{ cursor: 'pointer', color: gen ? '#d97706' : lead.email ? '#334155' : '#dc2626', fontSize: 12 }}
+            onClick={() => setEditing(true)} title="Click to edit">
+            {lead.email || '+ Add email'}
+            {gen && <span style={{ fontSize: 10, marginLeft: 4, opacity: .7 }}>generic</span>}
+          </span>
+        )}
+      </td>
+      <td><span style={{ fontSize: 11, background: '#eff6ff', color: '#2563eb', padding: '2px 6px', borderRadius: 4 }}>{lead.category || '—'}</span></td>
+      <td style={{ fontSize: 12, color: '#64748b' }}>{fmt(lead.estimated_audience)}</td>
+      <td>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setEditing(true)} style={{ fontSize: 11, padding: '3px 10px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 4, cursor: 'pointer' }}>✏️ Email</button>
+          <button onClick={skip} style={{ fontSize: 11, padding: '3px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, cursor: 'pointer' }}>Skip</button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+function ToBeContactedTab() {
+  const [leads, setLeads] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [emailFilter, setEmailFilter] = useState('personal')
+  const [loading, setLoading] = useState(true)
+  const PER = 25
+
+  async function load() {
+    setLoading(true)
+    try {
+      const p = { page, per_page: PER, status: 'New,Email Found' }
+      if (search) p.search = search
+      if (emailFilter !== 'all') p.email_quality = emailFilter
+      const r = await api.get('/leads', { params: p })
+      setLeads(r.data.data || [])
+      setTotal(r.data.total || 0)
+    } finally { setLoading(false) }
+  }
+
+  useEffect(() => { load() }, [page, emailFilter])
+  useEffect(() => { const t = setTimeout(() => { setPage(1); load() }, 350); return () => clearTimeout(t) }, [search])
+
+  const filters = [
+    { key: 'personal', label: '👤 Personal', sub: 'Ready to send' },
+    { key: 'generic',  label: '📧 Generic',  sub: 'Need updating' },
+    { key: 'none',     label: '❌ No email',  sub: 'Need finding' },
+    { key: 'all',      label: '📋 All',       sub: '' },
+  ]
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        {filters.map(f => (
+          <button key={f.key} onClick={() => { setEmailFilter(f.key); setPage(1) }} style={{
+            padding: '7px 16px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
+            background: emailFilter === f.key ? '#2563eb' : '#f1f5f9',
+            color: emailFilter === f.key ? '#fff' : '#475569',
+          }}>
+            {f.label} {f.sub && <span style={{ opacity: .7, fontWeight: 400, fontSize: 11 }}>{f.sub}</span>}
+          </button>
+        ))}
+        <input className="form-input" placeholder="Search…" value={search}
+          onChange={e => setSearch(e.target.value)} style={{ marginLeft: 'auto', maxWidth: 220, fontSize: 13 }} />
+        <span style={{ color: '#64748b', fontSize: 13 }}>{total} leads</span>
+      </div>
+
+      {loading ? <div className="loading-spinner"><div className="spinner" /></div> : total === 0 ? (
+        <div className="empty-state" style={{ padding: 40 }}>
+          <div className="empty-icon">{emailFilter === 'personal' ? '🎉' : '✅'}</div>
+          <p>{emailFilter === 'personal' ? 'No personal contacts queued — add emails above' : 'None here'}</p>
+        </div>
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead><tr><th>Name</th><th>Newsletter</th><th>Email</th><th>Category</th><th>Audience</th><th>Actions</th></tr></thead>
+            <tbody>{leads.map(l => <LeadRow key={l.id} lead={l} onSaved={() => { setPage(1); load() }} />)}</tbody>
+          </table>
+          <Pagination page={page} total={total} per={PER} onChange={setPage} />
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+const TABS = [
+  { key: 'to-contact', label: '📋 To Be Contacted' },
+  { key: 'contacted',  label: '✅ Contacted' },
+  { key: 'bounced',    label: '⚠️ Bounced' },
+]
+
+export default function Leads() {
+  const [tab, setTab] = useState('to-contact')
+  return (
+    <div>
+      <div className="page-header">
+        <div><h2>Leads</h2><p>Manage your outreach pipeline</p></div>
+      </div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '2px solid #e2e8f0' }}>
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
+            fontSize: 14, fontWeight: 600, marginBottom: -2,
+            color: tab === t.key ? '#2563eb' : '#64748b',
+            borderBottom: tab === t.key ? '2px solid #2563eb' : '2px solid transparent',
+          }}>{t.label}</button>
+        ))}
+      </div>
+      {tab === 'to-contact' && <ToBeContactedTab />}
+      {tab === 'contacted'  && <ContactedTab />}
+      {tab === 'bounced'    && <BouncedTab />}
     </div>
   )
 }

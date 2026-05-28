@@ -3,18 +3,16 @@ import { NavLink } from 'react-router-dom'
 const navItems = [
   { to: '/', icon: '📊', label: 'Dashboard', end: true },
   { to: '/leads', icon: '👥', label: 'Leads' },
-  { to: '/finder', icon: '🔍', label: 'Email Finder' },
   { to: '/templates', icon: '✉️', label: 'Templates' },
-  { to: '/queue', icon: '📬', label: 'Send Queue' },
-  { to: '/settings', icon: '⚙️', label: 'Settings' },
+  { to: '/queue', icon: '📬', label: 'Follow-ups' },
 ]
 
 export default function Navbar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <h1>Cold Outreach</h1>
-        <p>Asmi Newsletter System</p>
+        <h1>Asmi Outreach</h1>
+        <p>GTM Engine</p>
       </div>
 
       <nav className="sidebar-nav">
@@ -32,7 +30,7 @@ export default function Navbar() {
       </nav>
 
       <div className="sidebar-footer">
-        Built for Asmi outreach
+        Built for Asmi GTM
       </div>
     </aside>
   )

@@ -43,9 +43,10 @@ def _run_migrations():
         # app_settings — feature flags (added in system hardening)
         ("app_settings", "imap_enabled",        "BOOLEAN DEFAULT FALSE"),
         ("app_settings", "autopilot_enabled",   "BOOLEAN DEFAULT FALSE"),
-        # leads — priority + timezone optimisation
+        # leads — priority + timezone optimisation + bounce tracking
         ("leads", "priority",       "BOOLEAN DEFAULT FALSE"),
         ("leads", "lead_timezone",  "VARCHAR(80) DEFAULT 'America/New_York'"),
+        ("leads", "bounced_at",     "TIMESTAMP"),
     ]
 
     from database import DATABASE_URL

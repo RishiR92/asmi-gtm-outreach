@@ -28,6 +28,7 @@ class StatusEnum(str, enum.Enum):
     Feature_Confirmed = "Feature Confirmed"
     Not_Interested = "Not Interested"
     No_Response = "No Response"
+    Bounced = "Bounced"
 
 
 class Lead(Base):
@@ -51,6 +52,7 @@ class Lead(Base):
     ab_variant = Column(String(1))
     priority = Column(Boolean, default=False)          # manually boosted by user
     lead_timezone = Column(String(80), default="America/New_York")  # for open-rate optimisation
+    bounced_at = Column(DateTime, nullable=True)       # set when hard bounce detected
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

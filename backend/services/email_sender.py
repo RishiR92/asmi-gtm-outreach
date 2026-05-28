@@ -199,10 +199,24 @@ def send_email(lead_id: int, subject: str, body: str, db, email_type: str = "ini
     try:
         _do_send()
     except Exception as err:
+        err_str = str(err)
+        # Detect hard bounces: SMTP 550/551/552/553 = permanent delivery failure
+        is_bounce = any(code in err_str for code in ["550", "551", "552", "553", "SMTPRecipientsRefused"])
+        if is_bounce:
+            lead.status    = "Bounced"
+            lead.bounced_at = datetime.utcnow()
+            db.add(EmailLog(
+                lead_id=lead_id, email_type=email_type,
+                sent_at=datetime.utcnow(), subject=subject, body=body,
+                status="bounced", error_msg=f"[{method}] {err_str}",
+            ))
+            db.commit()
+            _mirror_status_to_railway(lead.email, "Bounced")
+            raise
         db.add(EmailLog(
             lead_id=lead_id, email_type=email_type,
             sent_at=datetime.utcnow(), subject=subject, body=body,
-            status="failed", error_msg=f"[{method}] {err}",
+            status="failed", error_msg=f"[{method}] {err_str}",
         ))
         db.commit()
         raise

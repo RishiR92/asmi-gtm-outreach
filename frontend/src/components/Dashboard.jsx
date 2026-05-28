@@ -432,9 +432,12 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h2>Asmi GTM Dashboard</h2>
-          <p>Autopilot cold outreach — prioritised by conversion potential & audience fit</p>
+          <p>Cold outreach — prioritised by audience fit & conversion potential</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => { fetchAll(); fetchSchedule() }}>🔄 Refresh</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <RunScoutBtn />
+          <button className="btn btn-secondary" onClick={() => { fetchAll(); fetchSchedule() }}>🔄 Refresh</button>
+        </div>
       </div>
 
       {runMsg && (
@@ -564,28 +567,22 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Recent Activity */}
+      {/* Recent Activity — sent only */}
       <div className="card">
-        <div className="section-title">Recent Activity</div>
-        {(!stats.recent_activity?.length) ? (
+        <div className="section-title">Recent Sends</div>
+        {(!stats.recent_activity?.filter(x => x.status === 'sent').length) ? (
           <div className="empty-state" style={{ padding: 20 }}>
             <div className="empty-icon">📭</div>
-            <p>No emails sent yet</p>
+            <p>No emails sent yet today</p>
           </div>
         ) : (
           <div className="activity-feed">
-            {stats.recent_activity.map(item => (
+            {stats.recent_activity.filter(x => x.status === 'sent').map(item => (
               <div className="activity-item" key={item.id}>
-                <div className={`activity-icon ${item.status}`}>
-                  {item.status === 'sent' ? '✉️' : item.status === 'failed' ? '❌' : '📨'}
-                </div>
+                <div className="activity-icon sent">✉️</div>
                 <div className="activity-info">
                   <strong>{item.lead_name}</strong>
-                  <span>
-                    {item.email_type === 'initial'   ? 'Initial email' :
-                     item.email_type === 'followup1' ? 'Follow-up 1'   : 'Follow-up 2'}
-                    {item.subject ? ` — "${item.subject}"` : ''}
-                  </span>
+                  <span>{item.email_type === 'initial' ? 'Initial' : item.email_type === 'followup1' ? 'Follow-up 1' : 'Follow-up 2'}</span>
                 </div>
                 <div className="activity-time">{timeAgo(item.sent_at)}</div>
               </div>
@@ -594,6 +591,28 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+  )
+}
+
+function RunScoutBtn() {
+  const [state, setState] = useState('idle') // idle | running | done
+  async function run() {
+    setState('running')
+    try {
+      const r = await api.post('/autopilot/run-scout')
+      setState('done')
+      setTimeout(() => setState('idle'), 8000)
+      alert(r.data.message)
+    } catch (e) {
+      setState('idle')
+      alert('Scout failed: ' + (e.response?.data?.detail || e.message))
+    }
+  }
+  return (
+    <button className="btn btn-secondary" onClick={run} disabled={state === 'running'}
+      title="Find new newsletter contacts now (no 3-day wait)">
+      {state === 'running' ? '🔍 Scouting…' : state === 'done' ? '✅ Scout done' : '🔍 Run Scout'}
+    </button>
   )
 }
 

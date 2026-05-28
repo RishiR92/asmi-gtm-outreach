@@ -14,11 +14,18 @@ from schemas import LeadCreate, LeadUpdate, LeadResponse, LeadStatusUpdate, Bulk
 router = APIRouter()
 
 
+_GENERIC_PREFIXES = (
+    'contact@','hello@','info@','admin@','team@','support@','editor@',
+    'newsletter@','hi@','mail@','press@','media@','marketing@',
+    'organizer@','manager@','group@','community@','members@','legal@',
+)
+
 @router.get("", response_model=dict)
 def list_leads(
     status: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    email_quality: Optional[str] = Query(None),  # "personal" | "generic" | "none"
     page: int = Query(1, ge=1),
     per_page: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -26,7 +33,12 @@ def list_leads(
     query = db.query(Lead)
 
     if status:
-        query = query.filter(Lead.status == status)
+        # Support comma-separated statuses e.g. "New,Email Found"
+        statuses = [s.strip() for s in status.split(',')]
+        if len(statuses) > 1:
+            query = query.filter(Lead.status.in_(statuses))
+        else:
+            query = query.filter(Lead.status == statuses[0])
     if category:
         query = query.filter(Lead.category == category)
     if search:
@@ -38,9 +50,25 @@ def list_leads(
                 Lead.url.ilike(f"%{search}%"),
             )
         )
+    # Filter by email quality after fetching (SQLite doesn't support regex well)
+    # We do this in Python after the main query
 
-    total = query.count()
-    leads = query.order_by(Lead.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    # Apply email_quality filter in Python
+    if email_quality:
+        all_for_filter = query.order_by(Lead.created_at.desc()).all()
+        if email_quality == "none":
+            filtered = [l for l in all_for_filter if not l.email]
+        elif email_quality == "generic":
+            filtered = [l for l in all_for_filter if l.email and any(l.email.lower().startswith(p) for p in _GENERIC_PREFIXES)]
+        elif email_quality == "personal":
+            filtered = [l for l in all_for_filter if l.email and not any(l.email.lower().startswith(p) for p in _GENERIC_PREFIXES)]
+        else:
+            filtered = all_for_filter
+        total = len(filtered)
+        leads = filtered[(page - 1) * per_page : page * per_page]
+    else:
+        total = query.count()
+        leads = query.order_by(Lead.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
 
     return {
         "data": [LeadResponse.model_validate(l).model_dump() for l in leads],

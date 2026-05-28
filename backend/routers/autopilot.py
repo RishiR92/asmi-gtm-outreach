@@ -257,6 +257,16 @@ def quick_add_email(req: QuickAddRequest, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/run-scout")
+def run_scout_now(background_tasks: BackgroundTasks):
+    """Trigger lead scout immediately — finds new newsletter contacts."""
+    def _run():
+        from services.lead_scout import run_lead_scout
+        run_lead_scout()
+    background_tasks.add_task(_run)
+    return {"data": {}, "message": "Lead scout started — new contacts will appear in Leads within ~60s"}
+
+
 @router.delete("/priority/{lead_id}")
 def remove_priority(lead_id: int, db: Session = Depends(get_db)):
     lead = db.query(Lead).get(lead_id)

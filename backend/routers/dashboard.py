@@ -106,8 +106,14 @@ def get_schedule(db: Session = Depends(get_db)):
     today = date.today()
     start_date = today
 
-    # Pull enough leads for 3 days in one query, already sorted viable-first / score-desc
-    full_queue = get_daily_queue(db, limit=daily_limit * 3)
+    # Pull enough leads for 3 days — personal emails only (exclude generic/junk)
+    from routers.leads import _GENERIC_PREFIXES
+    from models import Lead as LeadModel
+    full_queue_raw = get_daily_queue(db, limit=daily_limit * 10)  # fetch extra, then filter
+    full_queue = [
+        item for item in full_queue_raw
+        if item[0].email and not any(item[0].email.lower().startswith(p) for p in _GENERIC_PREFIXES)
+    ][:daily_limit * 3]
 
     def _lead_dict(lead, score, asmi_users, viable, rank):
         return {
