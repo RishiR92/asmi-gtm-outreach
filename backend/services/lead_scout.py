@@ -19,54 +19,60 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # ── Community search topics ──────────────────────────────────────────────────
-# Mapped to Asmi use cases: busy people who need coordination help
+# PRIMARY: Newsletter authors — individual writers with personal email addresses.
+# These are the highest-value leads (direct person, not org inbox).
+# SECONDARY: Community orgs — lower priority, almost always have generic emails.
 COMMUNITY_TOPICS = {
-    "Parenting": {
-        "keywords": ["parenting", "parents", "motherhood", "fatherhood", "moms", "dads", "babies"],
-        "category": "Business Owner",
-        "relevance_score": 85,  # busy parents need help
-        "description": "Busy parents managing kids + work + life"
+    # ── Newsletter authors (personal emails, highest priority) ───────────────
+    "AI-Newsletter": {
+        "keywords": ["AI newsletter", "artificial intelligence newsletter writer",
+                     "machine learning newsletter", "AI tools newsletter author",
+                     "ChatGPT newsletter", "LLM newsletter substack"],
+        "category": "Newsletter",
+        "relevance_score": 98,
+        "description": "AI/ML newsletter authors and writers"
     },
-    "Real Estate": {
-        "keywords": ["realestate", "realtor", "property", "housing", "realtors", "realestateagents"],
-        "category": "Business Owner",
-        "relevance_score": 90,  # agents spend time on calls/coordination
-        "description": "Real estate agents and investors"
-    },
-    "Startup-Founder": {
-        "keywords": ["startup", "entrepreneur", "founder", "indie_hackers", "solopreneur", "startup_founders"],
-        "category": "Startup-Founder",
+    "Tech-Newsletter": {
+        "keywords": ["tech newsletter author", "technology newsletter substack",
+                     "software engineering newsletter", "developer newsletter writer",
+                     "indie hacker newsletter", "product newsletter substack"],
+        "category": "Newsletter",
         "relevance_score": 95,
+        "description": "Technology and developer newsletter writers"
+    },
+    "Business-Newsletter": {
+        "keywords": ["business newsletter author", "entrepreneurship newsletter substack",
+                     "startup newsletter writer", "VC newsletter", "founder newsletter",
+                     "product management newsletter"],
+        "category": "Newsletter",
+        "relevance_score": 93,
+        "description": "Business and entrepreneurship newsletter writers"
+    },
+    "Productivity-Newsletter": {
+        "keywords": ["productivity newsletter author", "personal development newsletter",
+                     "self improvement newsletter substack", "GTD newsletter writer",
+                     "remote work newsletter author"],
+        "category": "Newsletter",
+        "relevance_score": 90,
+        "description": "Productivity and self-improvement newsletter writers"
+    },
+    # ── Professional communities (org contacts, lower priority) ─────────────
+    "Startup-Founder": {
+        "keywords": ["startup", "entrepreneur", "founder", "indie_hackers", "solopreneur"],
+        "category": "Startup-Founder",
+        "relevance_score": 85,
         "description": "Founders building businesses"
     },
-    "Consulting": {
-        "keywords": ["consulting", "consultant", "freelance", "solopreneur", "independent"],
+    "Real Estate": {
+        "keywords": ["realestate", "realtor", "property investor"],
         "category": "Business Owner",
         "relevance_score": 80,
-        "description": "Consultants and freelancers with complex workflows"
-    },
-    "Students": {
-        "keywords": ["students", "grad_school", "phd", "university", "college", "research"],
-        "category": "Productivity",
-        "relevance_score": 70,
-        "description": "Graduate students and researchers with busy schedules"
-    },
-    "Remote Work": {
-        "keywords": ["remotework", "remote_work", "digital_nomad", "location_independent"],
-        "category": "Productivity",
-        "relevance_score": 75,
-        "description": "Remote workers coordinating across timezones"
-    },
-    "Small Business": {
-        "keywords": ["smallbusiness", "small_business", "business_owners", "entrepreneur"],
-        "category": "Business Owner",
-        "relevance_score": 80,
-        "description": "Small business owners (restaurants, services, retail)"
+        "description": "Real estate agents and investors"
     },
     "Healthcare": {
-        "keywords": ["doctors", "healthcare", "medical", "nurses", "physicians"],
+        "keywords": ["doctors", "healthcare professional", "nurses community"],
         "category": "Business Owner",
-        "relevance_score": 88,
+        "relevance_score": 82,
         "description": "Healthcare professionals (extremely time-constrained)"
     },
 }

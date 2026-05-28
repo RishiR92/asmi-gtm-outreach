@@ -83,10 +83,14 @@ def scout_google_sync(topics: Dict) -> List[Dict]:
     communities = []
     seen_urls = set()
 
-    # Optimized search patterns for fast discovery
+    # Search patterns — newsletter authors first (produce personal emails),
+    # community patterns second (usually produce generic emails, lower value)
     search_patterns = [
+        '"{keyword}" newsletter email contact',
+        "{keyword} newsletter site:substack.com",
+        "{keyword} newsletter site:beehiiv.com",
+        "{keyword} newsletter author about",
         "{keyword} community",
-        "{keyword} professional community",
     ]
 
     serpapi_key = get_serpapi_key()
@@ -125,17 +129,17 @@ def scout_google_sync(topics: Dict) -> List[Dict]:
                                 if len(community_name) > 100:
                                     community_name = community_name[:100]
 
-                                # Extract email from snippet/title
+                                # Extract email from snippet/title only
+                                # Never guess generic contact@ — leave blank so team can fill it
                                 content_for_email = f"{title} {snippet}"
                                 specific_emails = extract_emails(content_for_email)
-                                preferred_email = specific_emails[0] if specific_emails else None
-
-                                # If no specific email found, generate generic patterns
-                                if not preferred_email:
-                                    domain = urlparse(url).netloc
-                                    generic_emails = get_generic_emails(domain)
-                                    # Use the most common one (contact@)
-                                    preferred_email = generic_emails[0] if generic_emails else ""
+                                # Only keep personal-looking emails (not generic prefixes)
+                                _GENERIC_PFX = ('contact@','hello@','info@','admin@','team@',
+                                                'support@','editor@','newsletter@','hi@','mail@',
+                                                'press@','media@','marketing@','manager@')
+                                personal_emails = [e for e in specific_emails
+                                                   if not any(e.lower().startswith(p) for p in _GENERIC_PFX)]
+                                preferred_email = personal_emails[0] if personal_emails else ""
 
                                 community = {
                                     "newsletter_name": community_name,
